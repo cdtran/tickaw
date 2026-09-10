@@ -1,0 +1,40 @@
+:root { font-family: system-ui, sans-serif; color: #17283f; background: #f3f6fa; font-synthesis: none; line-height: 1.5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1040px; margin: 0 auto; padding: 40px 24px; }
+h1 { font-size: 2.2rem; margin: 0; letter-spacing: -.04em; }
+h2 { font-size: 1.2rem; margin: 0 0 18px; }
+h3 { font-size: 1.05rem; margin: 0; overflow-wrap: anywhere; }
+header { margin-bottom: 28px; }
+header p { margin: 8px 0; }
+.eyebrow { font-size: .8rem; font-weight: 700; letter-spacing: .14em; color: #365885; }
+.upload-panel, .dataset { background: white; border: 1px solid #d4deea; border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+.upload-panel { border-top: 4px solid #2358bd; }
+form { display: grid; gap: 10px; }
+label { font-weight: 600; font-size: .9rem; }
+input, select, button { font: inherit; max-width: 100%; }
+input, select { padding: 10px; border: 1px solid #aab9cb; border-radius: 5px; background: #fff; color: inherit; }
+button { padding: 10px 18px; border-radius: 5px; border: 1px solid #2358bd; background: #2358bd; color: #fff; font-weight: 600; cursor: pointer; justify-self: start; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:hover:not(:disabled) { filter: brightness(.92); }
+:focus-visible { outline: 3px solid #db9400; outline-offset: 3px; }
+.secondary { background: white; color: #2358bd; padding: 6px 14px; }
+.hint, footer { font-size: .875rem; color: #52657b; }
+.hint { margin: 2px 0 12px; }
+.section-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 26px 0 16px; }
+.section-heading h2, .section-heading .hint { margin: 0; }
+.dataset .section-heading { margin: 0 0 12px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; text-align: left; font-size: .9rem; }
+th { color: #52657b; font-weight: 600; }
+th, td { padding: 12px 12px 12px 0; border-bottom: 1px solid #e3e9f0; vertical-align: top; }
+td:nth-child(2) { overflow-wrap: anywhere; min-width: 120px; }
+.status { font-size: .875rem; }
+.uploaded { color: #175c44; }
+.error { color: #a0232d; overflow-wrap: anywhere; }
+.success { color: #175c44; }
+.empty { padding: 32px; text-align: center; border: 1px dashed #aab9cb; border-radius: 8px; }
+nav { display: flex; gap: 12px; margin: 20px 0; }
+footer { margin-top: 36px; }
+a { color: #2358bd; }
+@media (max-width: 600px) { main { padding: 24px 16px; } .upload-panel, .dataset { padding: 16px; } }

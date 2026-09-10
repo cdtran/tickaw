@@ -1,0 +1,148 @@
+DATA NOTEBOOK MVP ROADMAP
+==========================
+
+Cadence: 3–4 hours each weekday
+Target: 3 weeks (about 45–60 hours)
+Scope: CSV upload, notebook-style questions, a single model provider, two safe
+analysis patterns, saved answers, tables, and charts. This roadmap deliberately
+excludes arbitrary generated-code fallback, XLSX edge cases, authentication, and
+AWS deployment until the core workflow works.
+
+Definition of done
+------------------
+A user can upload a CSV, inspect its profile, ask “Which region had the most
+revenue?” or “How did revenue change by month?”, choose a model, receive a table
+and chart, and return later to see the saved result tied to the same dataset
+version.
+
+WEEK 1 — DATA FOUNDATION
+------------------------
+
+Day 1: Local development environment
+- Understand the repository layout and the role of API, web app, database, and
+  object storage.
+- Make Docker Compose start Postgres, MinIO, API, and web services locally.
+- Add environment configuration, a health endpoint, and a simple web page.
+- Milestone: the local stack starts with one command and the browser can reach
+  the API.
+
+Day 2: Database and storage model
+- Create migrations for datasets and dataset versions.
+- Learn why metadata belongs in Postgres and raw files/artifacts in object
+  storage.
+- Add an S3/MinIO storage abstraction and local bucket setup.
+- Milestone: an API request can create a dataset-version metadata record and a
+  storage location.
+
+Day 3: CSV uploads
+- Add presigned-upload or API-mediated upload flow for CSV files.
+- Validate filename, MIME type, extension, and file-size limits.
+- Save the original file immutably and create a new dataset version for each
+  upload.
+- Milestone: upload a CSV from the browser and see it listed as a dataset.
+
+Day 4: Dataset profiling
+- Load a CSV with pandas in a controlled processing job.
+- Capture columns, inferred types, row count, null counts, sample values, and a
+  small preview.
+- Persist the profile as metadata without creating dynamic Postgres columns.
+- Milestone: the UI displays a data preview and schema for an uploaded CSV.
+
+Day 5: Week-one hardening
+- Add error states for malformed or unsupported CSVs.
+- Add tests for upload validation and profile extraction.
+- Review the data lifecycle: original file, profile, dataset version, deletion.
+- Milestone: a reliable upload-to-profile workflow for a few sample files.
+
+WEEK 2 — NOTEBOOK + TRUSTED ANALYSIS
+------------------------------------
+
+Day 6: Notebook persistence
+- Add notebook and notebook-cell database models.
+- Build the notebook page shell and create a question-input cell.
+- Persist a question, its dataset version, status, and timestamps.
+- Milestone: question cells remain after refreshing the page.
+
+Day 7: Define the analysis-plan schema
+- Define a small, explicit JSON schema for analysis plans.
+- Support only: metric selection, one grouping column, sum/average/count,
+  sorting, and a requested table/bar chart.
+- Write manual example plans and validation tests.
+- Milestone: a valid plan can be accepted and an invalid/missing column is
+  rejected with a clear error.
+
+Day 8: Build trusted plan execution
+- Compile validated plans into your own pandas operations.
+- Do not execute model-generated Python.
+- Return a structured result: result table, summary values, warnings, and chart
+  specification.
+- Milestone: a manually supplied “revenue by region” plan produces a table.
+
+Day 9: Time-series analysis
+- Extend the plan schema and executor for date bucketing and aggregation.
+- Support a line-chart specification for a metric over time.
+- Handle invalid/missing dates safely.
+- Milestone: a manually supplied “monthly revenue trend” plan produces a chart
+  specification and table.
+
+Day 10: Notebook results
+- Render narrative, result tables, and chart specifications in result cells.
+- Persist results, plan version, dataset version, and execution metadata.
+- Add a “How calculated” panel that displays the friendly plan steps.
+- Milestone: a notebook can show durable result cells for both MVP patterns.
+
+WEEK 3 — LLM, QUALITY, AND POLISH
+----------------------------------
+
+Day 11: First LLM adapter
+- Review the provider-neutral gateway boundary already in the project.
+- Configure one provider adapter and one product-owned model ID:
+  “analysis-default”.
+- Require structured JSON output matching the analysis-plan schema.
+- Milestone: the LLM converts a simple question into a validated analysis plan.
+
+Day 12: Full question-to-result flow
+- Connect question cell -> LLM plan -> validation -> trusted executor -> saved
+  result cell.
+- Add explicit statuses: queued, planning, running, completed, failed.
+- Ensure unsupported or ambiguous questions return a useful response rather than
+  attempting arbitrary code execution.
+- Milestone: “Which region had the most revenue?” works end to end.
+
+Day 13: Model selection and provenance
+- Add a model-selector UI using stable IDs, not raw provider identifiers.
+- Persist selected model ID, resolved provider/model, prompt version, and timing
+  for each cell.
+- Milestone: a completed result explains which model and dataset version made it.
+
+Day 14: Evaluation and reliability
+- Create 20–30 representative questions for the two supported patterns.
+- Include alternate column names, missing values, ambiguous wording, and invalid
+  requests.
+- Improve prompts/schema/validation based on failures.
+- Milestone: a repeatable MVP evaluation set with known expected outcomes.
+
+Day 15: Product review and next-step decision
+- Fix the highest-impact usability and reliability issues.
+- Document known limits: CSV only, supported question patterns, no code fallback.
+- Demo the complete flow with 2–3 realistic datasets.
+- Choose the next milestone: XLSX support, background jobs, authentication, AWS,
+  or a sandboxed-code fallback.
+- Milestone: a usable, demonstrable CSV MVP.
+
+Working rules
+-------------
+- Finish the day’s milestone before adding adjacent features.
+- Commit after each working milestone.
+- Keep user data immutable: edits/re-uploads create new dataset versions.
+- Never run generated Python in the API process.
+- Do not add an arbitrary-code fallback until the isolated execution design and
+  security limits are ready.
+- Keep a short decision log for choices that affect future architecture.
+
+Suggested first session
+-----------------------
+Begin with Day 1. Before installing anything, inspect the current boilerplate,
+decide whether to use MinIO locally, and write down the exact local services
+that will run. The goal is a small, understandable stack—not production
+infrastructure yet.
