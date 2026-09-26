@@ -1,0 +1,58 @@
+{
+  "case_version": 1,
+  "id": "revenue_in_2025",
+  "fixture": "sales.fixture.json",
+  "questions": [
+    "What is total revenue by region in 2025?",
+    "Sum revenue for each region for sales during calendar year 2025."
+  ],
+  "plan": {
+    "plan_version": 1,
+    "dimensions": [
+      "region"
+    ],
+    "metrics": [
+      {
+        "op": "sum",
+        "column": "revenue",
+        "alias": "total_revenue"
+      }
+    ],
+    "filters": [
+      {
+        "column": "sold_on",
+        "op": "gte",
+        "value": "2025-01-01"
+      },
+      {
+        "column": "sold_on",
+        "op": "lt",
+        "value": "2026-01-01"
+      }
+    ],
+    "order_by": [],
+    "limit": 100
+  },
+  "expected_columns": [
+    "region",
+    "total_revenue"
+  ],
+  "expected_rows": [
+    [
+      "East",
+      15
+    ],
+    [
+      "North",
+      40
+    ],
+    [
+      "West",
+      40
+    ],
+    [
+      null,
+      7
+    ]
+  ]
+}

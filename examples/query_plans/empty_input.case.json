@@ -1,0 +1,42 @@
+{
+  "case_version": 1,
+  "id": "empty_input",
+  "fixture": "sales.fixture.json",
+  "questions": [
+    "For region South, show total revenue and row count."
+  ],
+  "plan": {
+    "plan_version": 1,
+    "dimensions": [],
+    "metrics": [
+      {
+        "op": "sum",
+        "column": "revenue",
+        "alias": "total_revenue"
+      },
+      {
+        "op": "count_rows",
+        "alias": "row_count"
+      }
+    ],
+    "filters": [
+      {
+        "column": "region",
+        "op": "eq",
+        "value": "South"
+      }
+    ],
+    "order_by": [],
+    "limit": 100
+  },
+  "expected_columns": [
+    "total_revenue",
+    "row_count"
+  ],
+  "expected_rows": [
+    [
+      null,
+      0
+    ]
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "case_version": 1,
+  "id": "revenue_by_region",
+  "fixture": "sales.fixture.json",
+  "questions": [
+    "What is total revenue by region?",
+    "Sum revenue for each region.",
+    "Break down total revenue by region."
+  ],
+  "plan": {
+    "plan_version": 1,
+    "dimensions": [
+      "region"
+    ],
+    "metrics": [
+      {
+        "op": "sum",
+        "column": "revenue",
+        "alias": "total_revenue"
+      }
+    ],
+    "filters": [],
+    "order_by": [],
+    "limit": 100
+  },
+  "expected_columns": [
+    "region",
+    "total_revenue"
+  ],
+  "expected_rows": [
+    [
+      "East",
+      20
+    ],
+    [
+      "North",
+      40
+    ],
+    [
+      "West",
+      40
+    ],
+    [
+      null,
+      7
+    ]
+  ]
+}

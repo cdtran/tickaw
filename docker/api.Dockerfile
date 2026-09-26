@@ -4,6 +4,9 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir \
     "fastapi>=0.115" \
+    "pydantic>=2.5,<3" \
+    "sqlglot==28.10.1" \
+    "duckdb==1.4.1" \
     "uvicorn[standard]>=0.30" \
     "pydantic-settings>=2.5" \
     "sqlalchemy>=2.0" \

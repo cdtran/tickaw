@@ -10,7 +10,7 @@ The product name is **tickaw** (lowercase). Its domain is **tickaw.com**; domain
 - Background profiling into schema, samples, previews, and normalized Parquet.
 - Persistent notebooks and question cells referencing an exact dataset version.
 
-Analysis plans, trusted execution, charts, and LLM integration are upcoming milestones. The intended analysis boundary is validated structured plans compiled into application-owned operations.
+The v1 aggregate query-plan schema, SQLGlot compiler, and isolated local Parquet executor are implemented with typed JSON results and known-answer DuckDB tests. See the [execution walkthrough](docs/query-execution.md). Notebook job integration, production deployment, charts, and LLM integration are upcoming milestones. The analysis flow is LLM-generated JSON plans, deterministic validation, application-owned SQLGlot AST compilation, target SQL execution, and result checks. See the [query-plan design](docs/query-plan.md).
 
 ## Stack and layout
 

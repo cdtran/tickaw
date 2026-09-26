@@ -1,0 +1,81 @@
+# Private environment settings; publish only the sanitized template.
+.env
+.env.*
+!.env.example
+.envrc
+
+# Credentials and private keys.
+.aws/
+.ssh/
+secrets/
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local documentation and planning (intentionally private).
+/docs/
+/roadmap.txt
+
+# Python environments, caches, and build outputs.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+
+# Frontend dependencies and generated output. Keep dependency lockfiles.
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Test reports and logs.
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+*.log
+logs/
+
+# Local/private datasets, databases, exports, and execution artifacts.
+# Keep synthetic CSV fixtures and example plans tracked.
+/data/
+/private-data/
+uploads/
+artifacts/
+exports/
+backups/
+*.parquet
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# Terraform local state, plans, and environment values.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+# Keep .terraform.lock.hcl and sanitized *.tfvars.example files.
+
+# Machine/editor files.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~

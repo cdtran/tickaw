@@ -1,0 +1,254 @@
+{
+  "$defs": {
+    "ColumnMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "sum",
+            "avg",
+            "min",
+            "max",
+            "count_non_null"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "alias": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Alias",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "column",
+        "alias"
+      ],
+      "title": "ColumnMetric",
+      "type": "object"
+    },
+    "Comparison": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "column",
+        "op",
+        "value"
+      ],
+      "title": "Comparison",
+      "type": "object"
+    },
+    "NullCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Column",
+          "type": "string"
+        },
+        "op": {
+          "enum": [
+            "is_null",
+            "is_not_null"
+          ],
+          "title": "Op",
+          "type": "string"
+        }
+      },
+      "required": [
+        "column",
+        "op"
+      ],
+      "title": "NullCheck",
+      "type": "object"
+    },
+    "Ordering": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Field",
+          "type": "string"
+        },
+        "direction": {
+          "enum": [
+            "asc",
+            "desc"
+          ],
+          "title": "Direction",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "direction"
+      ],
+      "title": "Ordering",
+      "type": "object"
+    },
+    "RowCount": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "const": "count_rows",
+          "title": "Op",
+          "type": "string"
+        },
+        "alias": {
+          "pattern": "^[a-z][a-z0-9_]{0,62}$",
+          "title": "Alias",
+          "type": "string"
+        }
+      },
+      "required": [
+        "op",
+        "alias"
+      ],
+      "title": "RowCount",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "plan_version": {
+      "const": 1,
+      "title": "Plan Version",
+      "type": "integer"
+    },
+    "dimensions": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 8,
+      "title": "Dimensions",
+      "type": "array"
+    },
+    "metrics": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "avg": "#/$defs/ColumnMetric",
+            "count_non_null": "#/$defs/ColumnMetric",
+            "count_rows": "#/$defs/RowCount",
+            "max": "#/$defs/ColumnMetric",
+            "min": "#/$defs/ColumnMetric",
+            "sum": "#/$defs/ColumnMetric"
+          },
+          "propertyName": "op"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/ColumnMetric"
+          },
+          {
+            "$ref": "#/$defs/RowCount"
+          }
+        ]
+      },
+      "maxItems": 16,
+      "minItems": 1,
+      "title": "Metrics",
+      "type": "array"
+    },
+    "filters": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "eq": "#/$defs/Comparison",
+            "gt": "#/$defs/Comparison",
+            "gte": "#/$defs/Comparison",
+            "is_not_null": "#/$defs/NullCheck",
+            "is_null": "#/$defs/NullCheck",
+            "lt": "#/$defs/Comparison",
+            "lte": "#/$defs/Comparison",
+            "ne": "#/$defs/Comparison"
+          },
+          "propertyName": "op"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/Comparison"
+          },
+          {
+            "$ref": "#/$defs/NullCheck"
+          }
+        ]
+      },
+      "maxItems": 20,
+      "title": "Filters",
+      "type": "array"
+    },
+    "order_by": {
+      "items": {
+        "$ref": "#/$defs/Ordering"
+      },
+      "maxItems": 8,
+      "title": "Order By",
+      "type": "array"
+    },
+    "limit": {
+      "maximum": 1000,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "plan_version",
+    "dimensions",
+    "metrics",
+    "filters",
+    "order_by",
+    "limit"
+  ],
+  "title": "QueryPlan",
+  "type": "object"
+}

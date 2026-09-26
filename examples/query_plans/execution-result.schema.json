@@ -1,0 +1,339 @@
+{
+  "$defs": {
+    "ExecutionError": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ExecutionError",
+      "type": "object"
+    },
+    "ExecutionFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "result_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Result Version",
+          "type": "integer"
+        },
+        "status": {
+          "const": "failed",
+          "default": "failed",
+          "title": "Status",
+          "type": "string"
+        },
+        "error": {
+          "$ref": "#/$defs/ExecutionError"
+        },
+        "metadata": {
+          "$ref": "#/$defs/ExecutionMetadata"
+        }
+      },
+      "required": [
+        "error",
+        "metadata"
+      ],
+      "title": "ExecutionFailure",
+      "type": "object"
+    },
+    "ExecutionMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "title": "Execution Id",
+          "type": "string"
+        },
+        "dataset_version_id": {
+          "title": "Dataset Version Id",
+          "type": "string"
+        },
+        "dataset_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dataset Sha256"
+        },
+        "plan_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Sha256"
+        },
+        "plan_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plan Version"
+        },
+        "compiler_version": {
+          "title": "Compiler Version",
+          "type": "string"
+        },
+        "executor_version": {
+          "title": "Executor Version",
+          "type": "string"
+        },
+        "sqlglot_version": {
+          "title": "Sqlglot Version",
+          "type": "string"
+        },
+        "engine": {
+          "const": "duckdb",
+          "default": "duckdb",
+          "title": "Engine",
+          "type": "string"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "started_at": {
+          "title": "Started At",
+          "type": "string"
+        },
+        "duration_ms": {
+          "title": "Duration Ms",
+          "type": "integer"
+        },
+        "executed_sql": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Executed Sql"
+        }
+      },
+      "required": [
+        "execution_id",
+        "dataset_version_id",
+        "compiler_version",
+        "executor_version",
+        "sqlglot_version",
+        "engine_version",
+        "started_at",
+        "duration_ms"
+      ],
+      "title": "ExecutionMetadata",
+      "type": "object"
+    },
+    "ExecutionSuccess": {
+      "additionalProperties": false,
+      "properties": {
+        "result_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Result Version",
+          "type": "integer"
+        },
+        "status": {
+          "const": "succeeded",
+          "default": "succeeded",
+          "title": "Status",
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/TableResult"
+        },
+        "metadata": {
+          "$ref": "#/$defs/ExecutionMetadata"
+        }
+      },
+      "required": [
+        "table",
+        "metadata"
+      ],
+      "title": "ExecutionSuccess",
+      "type": "object"
+    },
+    "ResultCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "not_checked"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "status"
+      ],
+      "title": "ResultCheck",
+      "type": "object"
+    },
+    "ResultColumn": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "logical_type": {
+          "enum": [
+            "text",
+            "integer",
+            "number",
+            "boolean",
+            "date"
+          ],
+          "title": "Logical Type",
+          "type": "string"
+        },
+        "database_type": {
+          "title": "Database Type",
+          "type": "string"
+        },
+        "encoding": {
+          "enum": [
+            "json",
+            "decimal_string",
+            "integer_string",
+            "iso_date"
+          ],
+          "title": "Encoding",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "logical_type",
+        "database_type",
+        "encoding"
+      ],
+      "title": "ResultColumn",
+      "type": "object"
+    },
+    "TableResult": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/ResultColumn"
+          },
+          "title": "Columns",
+          "type": "array"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "returned_rows": {
+          "title": "Returned Rows",
+          "type": "integer"
+        },
+        "requested_limit": {
+          "title": "Requested Limit",
+          "type": "integer"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/ResultCheck"
+          },
+          "title": "Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "columns",
+        "rows",
+        "returned_rows",
+        "requested_limit",
+        "truncated",
+        "warnings",
+        "checks"
+      ],
+      "title": "TableResult",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "failed": "#/$defs/ExecutionFailure",
+      "succeeded": "#/$defs/ExecutionSuccess"
+    },
+    "propertyName": "status"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ExecutionSuccess"
+    },
+    {
+      "$ref": "#/$defs/ExecutionFailure"
+    }
+  ]
+}

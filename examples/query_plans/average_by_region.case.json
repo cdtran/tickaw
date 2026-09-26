@@ -1,0 +1,47 @@
+{
+  "case_version": 1,
+  "id": "average_by_region",
+  "fixture": "sales.fixture.json",
+  "questions": [
+    "What is average revenue by region?",
+    "Show the mean revenue for each region."
+  ],
+  "plan": {
+    "plan_version": 1,
+    "dimensions": [
+      "region"
+    ],
+    "metrics": [
+      {
+        "op": "avg",
+        "column": "revenue",
+        "alias": "average_revenue"
+      }
+    ],
+    "filters": [],
+    "order_by": [],
+    "limit": 100
+  },
+  "expected_columns": [
+    "region",
+    "average_revenue"
+  ],
+  "expected_rows": [
+    [
+      "East",
+      10
+    ],
+    [
+      "North",
+      20
+    ],
+    [
+      "West",
+      20
+    ],
+    [
+      null,
+      7
+    ]
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "case_version": 1,
+  "id": "revenue_by_product",
+  "fixture": "sales.fixture.json",
+  "questions": [
+    "What is total revenue by product?",
+    "Sum revenue for each product."
+  ],
+  "plan": {
+    "plan_version": 1,
+    "dimensions": [
+      "product"
+    ],
+    "metrics": [
+      {
+        "op": "sum",
+        "column": "revenue",
+        "alias": "total_revenue"
+      }
+    ],
+    "filters": [],
+    "order_by": [],
+    "limit": 100
+  },
+  "expected_columns": [
+    "product",
+    "total_revenue"
+  ],
+  "expected_rows": [
+    [
+      "A",
+      57
+    ],
+    [
+      "B",
+      50
+    ]
+  ]
+}
