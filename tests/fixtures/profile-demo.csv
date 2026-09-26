@@ -1,0 +1,4 @@
+category,revenue,active,code,missing,date
+Books,120,true,001,,2026-01-01
+Games,,false,002,,2026-01-02
+Books,180,true,003,,2026-01-03

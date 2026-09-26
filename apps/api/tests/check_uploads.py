@@ -12,7 +12,7 @@ from sqlalchemy.engine import make_url
 from app.core.config import get_settings
 from app.db.session import get_session_factory
 from app.main import app
-from app.models import Dataset, DatasetVersion
+from app.models import Dataset, DatasetVersion, ProfilingJob
 from app.services.object_storage import get_storage_client, store_original
 
 CSV = b"category,revenue\nBooks,120\nGames,240\n"
@@ -32,6 +32,7 @@ class UploadTests(unittest.TestCase):
 
     def tearDown(self):
         with get_session_factory()() as session:
+            session.execute(delete(ProfilingJob))
             session.execute(delete(DatasetVersion))
             session.execute(delete(Dataset))
             session.commit()
@@ -99,6 +100,26 @@ class UploadTests(unittest.TestCase):
             response = self.client.post("/api/v1/datasets/uploads?filename=sales.csv",
                                         content=iter([CSV, b"x"]), headers={"Content-Type": "text/csv"})
             self.assertEqual(response.status_code, 413)
+
+    def test_invalid_uploads_leave_no_objects_versions_or_jobs(self):
+        before = self.storage.list_objects_v2(Bucket=self.bucket).get("KeyCount", 0)
+        for filename, data, mime, expected in [
+            (" bad.csv", CSV, "text/csv", 422),
+            ("é" * 126 + ".csv", CSV, "text/csv", 422),
+            ("bad.csv", b" \n\t", "text/csv", 422),
+            ("bad.csv", b"\xef\xbb\xbf", "text/csv", 422),
+            ("bad.csv", b"\xff\xfea\x00", "text/csv", 422),
+            ("bad.csv", CSV, "application/octet-stream", 415),
+            ("book.xlsx", CSV, "application/vnd.ms-excel", 422),
+        ]:
+            with self.subTest(filename=filename, mime=mime):
+                response = self.upload(filename, data, mime)
+                self.assertEqual(response.status_code, expected, response.text)
+                self.assertTrue(response.json()["detail"])
+        with get_session_factory()() as session:
+            self.assertEqual(session.scalars(select(DatasetVersion)).all(), [])
+            self.assertEqual(session.scalars(select(ProfilingJob)).all(), [])
+        self.assertEqual(self.storage.list_objects_v2(Bucket=self.bucket).get("KeyCount", 0), before)
 
     def test_browser_mime_variants_and_uppercase_extension(self):
         for mime in ("text/csv;charset=utf-8", "application/vnd.ms-excel", "text/plain", "application/csv"):

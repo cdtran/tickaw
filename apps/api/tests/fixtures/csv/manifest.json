@@ -1,0 +1,12 @@
+{
+  "fixture_version": 1,
+  "cases": [
+    {"file":"sales.csv","status":"READY","row_count":3,"types":["string","integer"],"nulls":[0,1],"preview":[{"category":"Books","revenue":120},{"category":"Games","revenue":null},{"category":"Books","revenue":180}]},
+    {"file":"quoted.csv","status":"READY","row_count":2,"types":["string","string"],"nulls":[0,0],"preview":[{"name":"Doe, Jane","note":"first line\nsecond line"},{"name":"Zoë","note":"She said \"hello\""}]},
+    {"file":"header-only.csv","status":"READY","row_count":0,"types":["unknown","unknown"],"nulls":[0,0],"preview":[]},
+    {"file":"ragged.csv","status":"FAILED","error_code":"INVALID_CSV"},
+    {"file":"duplicate-headers.csv","status":"FAILED","error_code":"DUPLICATE_COLUMNS"},
+    {"file":"semicolon.csv","status":"FAILED","error_code":"UNSUPPORTED_DELIMITER"},
+    {"file":"json.csv","status":"FAILED","error_code":"UNSUPPORTED_FORMAT"}
+  ]
+}

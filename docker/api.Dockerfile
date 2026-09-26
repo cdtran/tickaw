@@ -10,9 +10,14 @@ RUN pip install --no-cache-dir \
     "psycopg[binary]>=3.2" \
     "alembic>=1.13" \
     "boto3>=1.36" \
-    "httpx>=0.28"
+    "httpx>=0.28" \
+    "pandas>=2.2,<3" \
+    "pyarrow>=18,<24"
 
 COPY apps/api /app
+COPY packages /opt/packages
+ENV PYTHONPATH=/app:/opt
+ENV PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 8000
 

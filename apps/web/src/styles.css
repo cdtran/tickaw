@@ -38,3 +38,12 @@ nav { display: flex; gap: 12px; margin: 20px 0; }
 footer { margin-top: 36px; }
 a { color: #2358bd; }
 @media (max-width: 600px) { main { padding: 24px 16px; } .upload-panel, .dataset { padding: 16px; } }
+
+.profile-panel { margin-top: 24px; border-top: 2px solid #d4deea; padding-top: 20px; }
+.profile-panel h4 { margin: 24px 0 8px; }
+.profile-panel td, .profile-panel th { min-width: 100px; max-width: 360px; overflow-wrap: anywhere; }
+.profile-panel .hint { margin-top: 12px; }
+.null-value { color: #69768a; font-style: italic; }
+
+textarea { font: inherit; padding: 10px; border: 1px solid #aab9cb; border-radius: 5px; resize: vertical; width: 100%; }
+.question-text { white-space: pre-wrap; overflow-wrap: anywhere; }

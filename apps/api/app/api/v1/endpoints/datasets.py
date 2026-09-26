@@ -7,7 +7,9 @@ from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
 from app.db.session import get_session_factory
-from app.schemas.dataset import DatasetResponse
+from app.schemas.dataset import DatasetResponse, JobResponse, VersionDetail
+from app.models import DatasetVersion
+from app.services.profiling_service import job_for_version, request_profile
 from app.services import dataset_service
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -73,3 +75,22 @@ async def upload(request: Request, filename: str = Query(..., max_length=255),
 
     # Boto3 and SQLAlchemy are synchronous; keep their I/O off the async event loop.
     return await run_in_threadpool(persist)
+
+
+@router.get("/versions/{version_id}", response_model=VersionDetail)
+def version_detail(version_id: UUID):
+    with get_session_factory()() as session:
+        version = session.get(DatasetVersion, version_id)
+        if version is None:
+            raise HTTPException(404, "Dataset version not found.")
+        result = VersionDetail.model_validate(version)
+        job = job_for_version(session, version_id)
+        result.job = JobResponse.model_validate(job) if job else None
+        return result
+
+
+@router.post("/versions/{version_id}/profile", status_code=202)
+def start_profile(version_id: UUID):
+    with get_session_factory()() as session:
+        request_profile(session, version_id)
+    return {"version_id": str(version_id), "message": "Profiling requested; completed versions are unchanged."}

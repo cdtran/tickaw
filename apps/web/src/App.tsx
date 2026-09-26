@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import "./styles.css";
+import NotebookPage from "./pages/NotebookPage";
+import VersionProfile from "./VersionProfile";
 
 type Version = {
   id: string;
@@ -21,7 +23,21 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export default function App() {
+  const [route, setRoute] = useState(window.location.hash);
+  useEffect(() => {
+    const change = () => setRoute(window.location.hash);
+    window.addEventListener("hashchange", change);
+    return () => window.removeEventListener("hashchange", change);
+  }, []);
+  if (route === "#notebooks" || route.startsWith("#notebooks/")) {
+    return <NotebookPage key={route} notebookId={route.slice("#notebooks/".length)} />;
+  }
+  return <DatasetsPage />;
+}
+
+function DatasetsPage() {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null);
   const [target, setTarget] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [maximum, setMaximum] = useState<number | null>(null);
@@ -72,6 +88,7 @@ export default function App() {
         body: file,
       }));
       succeeded = true;
+      setSelectedVersion(result.versions[0].id);
       setNotice(`Uploaded ${file.name} to ${result.name}, version ${result.versions[0].version_number}.`);
       setFile(null);
       if (input.current) input.current.value = "";
@@ -101,6 +118,7 @@ export default function App() {
 
   return (
     <main>
+      <nav><a href="#datasets">Datasets</a><a href="#notebooks">Notebooks</a></nav>
       <header><p className="eyebrow">DATA NOTEBOOK</p><h1>Datasets</h1>
         <p>Upload a CSV and keep each version of your data.</p></header>
       <section className="upload-panel" aria-labelledby="upload-heading">
@@ -114,7 +132,7 @@ export default function App() {
           <label htmlFor="csv">CSV file</label>
           <input ref={input} id="csv" type="file" accept=".csv,text/csv" disabled={busy}
             onChange={event => { setFile(event.target.files?.[0] ?? null); setError(""); setNotice(""); }} />
-          <p className="hint">UTF-8 CSV{maximum !== null ? ` · up to ${maximum / 1024 / 1024} MiB` : ""}. Originals are preserved; profiling and analysis come next.</p>
+          <p className="hint">UTF-8 CSV{maximum !== null ? ` · up to ${maximum / 1024 / 1024} MiB` : ""}. Originals are preserved. Schema and preview appear after profiling.</p>
           <button type="submit" disabled={!file || busy || loading || maximum === null}>{busy ? "Uploading…" : "Upload CSV"}</button>
         </form>
       </section>
@@ -127,13 +145,22 @@ export default function App() {
         {!loading && datasets.length === 0 && <p className="empty">{offset ? "No more datasets." : "No datasets yet. Upload your first CSV above."}</p>}
         {datasets.map(dataset => <article className="dataset" key={dataset.id}>
           <div className="section-heading"><h3>{dataset.name}</h3><span className="hint">{dataset.versions.length} version{dataset.versions.length === 1 ? "" : "s"}</span></div>
-          <div className="table-wrap"><table><thead><tr><th>Version</th><th>Original file</th><th>Size</th><th>Status</th></tr></thead>
+          <div className="table-wrap"><table><thead><tr><th>Version</th><th>Original file</th><th>Size</th><th>Status</th><th>Details</th></tr></thead>
             <tbody>{dataset.versions.map(version => <tr key={version.id}>
               <td>v{version.version_number}</td><td>{version.original_filename}</td>
               <td>{version.size_bytes === null ? "—" : `${(version.size_bytes / 1024).toFixed(1)} KiB`}</td>
-              <td><span className={`status ${version.status.toLowerCase()}`}>{version.status === "UPLOADED" ? "Uploaded · awaiting profiling" : version.status.replaceAll("_", " ").toLowerCase()}</span>
+              <td><span className={`status ${version.status.toLowerCase()}`}>{version.status === "UPLOADED" ? "Uploaded" : version.status.replaceAll("_", " ").toLowerCase()}</span>
                 {version.error_message && <p className="error">{version.error_message}</p>}</td>
+              <td><button className="secondary" aria-expanded={selectedVersion === version.id}
+                onClick={() => setSelectedVersion(selectedVersion === version.id ? null : version.id)}>
+                {selectedVersion === version.id ? "Hide" : "Schema & preview"}</button></td>
             </tr>)}</tbody></table></div>
+          {dataset.versions.some(version => version.id === selectedVersion) && selectedVersion &&
+            <VersionProfile key={selectedVersion} versionId={selectedVersion} onStatus={(id, status, message) => {
+              setDatasets(previous => previous.map(item => ({ ...item, versions: item.versions.map(version =>
+                version.id === id ? { ...version, status, error_message: message } : version) })));
+            }} />}
+
         </article>)}
         {(offset > 0 || datasets.length === 50) && <nav aria-label="Dataset pages">
           <button className="secondary" disabled={busy || loading || offset === 0} onClick={() => navigate(Math.max(0, offset - 50))}>Previous</button>

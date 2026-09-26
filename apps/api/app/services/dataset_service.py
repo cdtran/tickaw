@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.models import Dataset, DatasetVersion
 from app.schemas.dataset import DatasetResponse
 from app.services.object_storage import store_original
+from app.services.profiling_service import enqueue_profile
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ def upload_csv(session: Session, filename: str, data: bytes,
         raise HTTPException(503, "Storage unavailable. This upload was marked failed.") from None
 
     version.status = "UPLOADED"
+    enqueue_profile(session, version)
     session.commit()
     session.expire(dataset, ["versions"])
     return describe_dataset(dataset)
