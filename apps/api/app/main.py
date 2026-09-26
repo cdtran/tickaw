@@ -6,9 +6,9 @@ from app.api.v1.router import router
 
 
 app = FastAPI(
-    title="Data Notebook API",
+    title="tickaw API",
     version="0.1.0",
-    description="Local development API for the Data Notebook platform.",
+    description="Local development API for the tickaw platform.",
 )
 
 

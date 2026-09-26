@@ -119,7 +119,7 @@ function DatasetsPage() {
   return (
     <main>
       <nav><a href="#datasets">Datasets</a><a href="#notebooks">Notebooks</a></nav>
-      <header><p className="eyebrow">DATA NOTEBOOK</p><h1>Datasets</h1>
+      <header><p className="eyebrow">tickaw</p><h1>Datasets</h1>
         <p>Upload a CSV and keep each version of your data.</p></header>
       <section className="upload-panel" aria-labelledby="upload-heading">
         <h2 id="upload-heading">Upload CSV</h2>

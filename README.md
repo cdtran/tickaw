@@ -1,57 +1,51 @@
-# Data Notebook
+# tickaw
 
-An AI-assisted data-analysis application. Users upload CSV or Excel workbooks, ask questions in notebook-style cells, choose an analysis model, and receive reproducible tables and charts.
+An AI-assisted data-analysis application for asking questions about uploaded tabular data in notebook-style cells.
 
-This repository is intentionally a **scaffold only**. No upload, LLM, data-processing, execution, database, or UI behavior has been implemented.
+The product name is **tickaw** (lowercase). Its domain is **tickaw.com**; domain registration does not mean the application is deployed there. Use this name for new UI copy, documentation, and project metadata.
 
-## Recommended stack
+## Current functionality
 
-| Concern | Choice | Why |
-| --- | --- | --- |
-| Web app | React + TypeScript + Vite | Lightweight, fast development, strong chart/component ecosystem |
-| API | FastAPI + Pydantic | Python-native, typed contracts, async-ready |
-| Analysis | pandas (later Polars option) | Matches the planned code-generation workflow |
-| Database | PostgreSQL | Durable metadata, conversations, jobs, and audit records |
-| File storage | Amazon S3 | Scalable storage for source files and generated artifacts |
-| Background jobs | Celery + Redis (or SQS in AWS) | Keeps long analysis runs out of request handlers |
-| Execution | Isolated container/job | Essential boundary for LLM-generated Python |
-| Deployment | ECS Fargate + RDS + S3 | Managed AWS path without Kubernetes overhead |
+- CSV uploads with independent datasets and immutable dataset versions.
+- Background profiling into schema, samples, previews, and normalized Parquet.
+- Persistent notebooks and question cells referencing an exact dataset version.
 
-## Architecture
+Analysis plans, trusted execution, charts, and LLM integration are upcoming milestones. The intended analysis boundary is validated structured plans compiled into application-owned operations.
 
-```text
-Browser (React notebook)
-        |
-        v
-FastAPI API  -----> PostgreSQL (datasets, cells, jobs, model settings)
-   |    |
-   |    +-----------> S3 (uploaded files, previews, charts, exports)
-   v
-Queue / worker ------------> isolated Python execution environment
-   |
-   +-----------------------> configured LLM provider(s)
+## Stack and layout
+
+- `apps/web` — React, TypeScript, and Vite frontend
+- `apps/api` — FastAPI API, SQLAlchemy models, Alembic migrations, and profiling worker
+- `packages/data_engine` — ingestion and profiling with pandas
+- `packages/llm_gateway` — scaffold for provider-neutral model integration
+- `packages/charting` — scaffold for chart specifications
+- `docker` — container build definitions
+- `infra/terraform` — infrastructure scaffold for future AWS deployment
+- `docs` — architecture, local development, and learning guides
+
+Postgres stores metadata. MinIO stores original files and normalized Parquet locally;
+S3 is planned for AWS. The profiling worker currently polls Postgres.
+
+## Local development
+
+For first-time setup, copy `.env.example` to `.env`; preserve an existing `.env`.
+Then run:
+
+```sh
+docker compose build api profiling-worker
+docker compose up -d api web
+docker compose exec -T api alembic upgrade head
+docker compose exec -T api python -m scripts.init_storage
+docker compose up -d profiling-worker
 ```
 
-The API should store uploaded files in S3, create a dataset record in Postgres, and queue profiling. For a question, a worker should load the approved dataset into pandas, give the model a constrained dataset profile and question, validate the returned code, run it in an isolated environment, save resulting table/chart artifacts, and return a structured cell result. Never execute model-generated code in the API process.
+Frontend: http://localhost:5173 · API docs: http://localhost:8000/docs ·
+MinIO console: http://localhost:9001
 
-## Quick start (when implementation begins)
+The internal database name `data_notebook` and bucket name `data-notebook-dev`
+are retained for compatibility with existing local data. They are resource
+identifiers, not the product name; renaming them requires a separate data migration.
 
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-Frontend: `http://localhost:5173` · API docs: `http://localhost:8000/docs` ·
-MinIO console: `http://localhost:9001`
-
-## Layout
-
-- `apps/api` — FastAPI application and API contracts
-- `apps/web` — React notebook UI
-- `packages/data_engine` — ingestion, profiling, execution policy, result serialization
-- `packages/llm_gateway` — provider-agnostic LLM middleware, adapters, and model registry
-- `packages/charting` — chart-spec generation and artifact helpers
-- `infra/terraform` — AWS infrastructure modules and environments
-- `docs` — architectural decisions and implementation notes
-
-Read [docs/local-development.md](docs/local-development.md), [docs/implementation-roadmap.md](docs/implementation-roadmap.md), and [docs/llm-middleware.md](docs/llm-middleware.md) before building behavior.
+See the [local development guide](docs/local-development.md),
+[implementation workbook](docs/implementation-workbook.md), and
+[notebook foundation walkthrough](docs/notebook-foundation.md).

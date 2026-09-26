@@ -1,5 +1,5 @@
 [project]
-name = "data-notebook"
+name = "tickaw"
 version = "0.1.0"
 description = "AI-assisted notebook analysis for uploaded tabular data"
 requires-python = ">=3.12"

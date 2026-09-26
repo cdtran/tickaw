@@ -67,7 +67,7 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
   }
   return <main>
     <nav><a href="#datasets">Datasets</a><a href="#notebooks">Notebooks</a></nav>
-    <header><p className="eyebrow">DATA NOTEBOOK</p><h1>{detail?.title ?? "Notebooks"}</h1>
+    <header><p className="eyebrow">tickaw</p><h1>{detail?.title ?? "Notebooks"}</h1>
       <p>Save questions against an exact version of your data.</p></header>
     {error && <p role="alert" className="error">{error}</p>}
     {loading ? <p role="status">Loading notebook…</p> : detail ? <>
