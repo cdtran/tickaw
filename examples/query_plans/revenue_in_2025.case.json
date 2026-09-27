@@ -7,7 +7,7 @@
     "Sum revenue for each region for sales during calendar year 2025."
   ],
   "plan": {
-    "plan_version": 1,
+    "plan_version": 2,
     "dimensions": [
       "region"
     ],
@@ -31,7 +31,8 @@
       }
     ],
     "order_by": [],
-    "limit": 100
+    "limit": 100,
+    "presentation": {"type": "bar"}
   },
   "expected_columns": [
     "region",

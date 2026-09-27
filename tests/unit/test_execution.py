@@ -22,12 +22,13 @@ CATALOG = FIXTURE["columns"]
 
 def plan():
     return {
-        "plan_version": 1,
+        "plan_version": 2,
         "dimensions": ["region"],
         "metrics": [{"op": "sum", "column": "revenue", "alias": "total"}],
         "filters": [],
         "order_by": [],
         "limit": 100,
+        "presentation": {"type": "bar"},
     }
 
 
@@ -189,7 +190,11 @@ def test_precision_and_date_encoding(tmp_path):
 
 def test_nonfinite_results_fail(tmp_path):
     source = write_query_fixture(tmp_path, "SELECT 1e308 AS revenue FROM range(2)")
-    result = execute(source, plan() | {"dimensions": []}, columns={"revenue": "number"})
+    result = execute(
+        source,
+        plan() | {"dimensions": [], "presentation": {"type": "table"}},
+        columns={"revenue": "number"},
+    )
     assert result.status == "failed" and result.error.code == "NON_FINITE_RESULT"
 
 
@@ -264,5 +269,9 @@ def test_result_schema_artifact():
 
 def test_unsupported_parquet_type(tmp_path):
     source = write_query_fixture(tmp_path, "SELECT [1, 2] AS revenue")
-    result = execute(source, plan() | {"dimensions": []}, columns={"revenue": "number"})
+    result = execute(
+        source,
+        plan() | {"dimensions": [], "presentation": {"type": "table"}},
+        columns={"revenue": "number"},
+    )
     assert result.status == "failed" and result.error.code == "UNSUPPORTED_TYPE"

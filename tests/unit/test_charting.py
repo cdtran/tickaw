@@ -30,7 +30,8 @@ def test_category_result_becomes_bar_chart():
         table(
             [column("region", "text"), column("revenue", "number")],
             [["East", 10], ["West", 20]],
-        )
+        ),
+        "bar",
     )
     assert spec == ChartSpec(
         type="bar",
@@ -44,7 +45,8 @@ def test_time_result_becomes_line_chart_without_inventing_gap_fill():
         table(
             [column("month", "date", "iso_date"), column("revenue", "number")],
             [["2026-01-01", 10], ["2026-03-01", 30]],
-        )
+        ),
+        "line",
     )
     assert spec is not None
     assert spec.type == "line"
@@ -52,13 +54,22 @@ def test_time_result_becomes_line_chart_without_inventing_gap_fill():
 
 
 def test_unsafe_or_unhelpful_shapes_are_table_only():
-    assert chart_spec_for(table([column("total", "number")], [[10]])) is None
+    assert chart_spec_for(table([column("total", "number")], [[10]]), "bar") is None
+    assert chart_spec_for(
+        table([column("region", "text"), column("total", "number")], [["East", 10]]),
+        "table",
+    ) is None
+    assert chart_spec_for(
+        table([column("region", "text"), column("total", "number")], [["East", 10]]),
+        "line",
+    ) is None
     assert (
         chart_spec_for(
             table(
                 [column("region", "text"), column("product", "text"), column("total", "number")],
                 [["East", "A", 10]],
-            )
+            ),
+            "bar",
         )
         is None
     )
@@ -67,7 +78,8 @@ def test_unsafe_or_unhelpful_shapes_are_table_only():
             table(
                 [column("region", "text"), column("huge", "integer", "integer_string")],
                 [["East", "9007199254740993"]],
-            )
+            ),
+            "bar",
         )
         is None
     )
@@ -76,7 +88,8 @@ def test_unsafe_or_unhelpful_shapes_are_table_only():
             table(
                 [column("region", "text"), column("total", "number")],
                 [[str(index), index] for index in range(61)],
-            )
+            ),
+            "bar",
         )
         is None
     )

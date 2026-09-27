@@ -32,10 +32,10 @@ def sha256_json(value: dict) -> str:
     return hashlib.sha256(canonical_json(value)).hexdigest()
 
 
-def stored_result(execution: ExecutionSuccess) -> StoredAnalysisResult:
+def stored_result(execution: ExecutionSuccess, plan: QueryPlan) -> StoredAnalysisResult:
     return StoredAnalysisResult(
         execution=execution,
-        chart=chart_spec_for(execution.table),
+        chart=chart_spec_for(execution.table, plan.presentation.type),
     )
 
 
@@ -90,7 +90,11 @@ def complete_run(
     if metadata.plan_sha256 != run.plan_sha256:
         raise HTTPException(409, "Execution plan does not match the analysis run.")
 
-    artifact = stored_result(execution)
+    try:
+        plan = QueryPlan.model_validate(run.plan_json)
+    except ValidationError as error:
+        raise HTTPException(500, "The stored query plan is invalid.") from error
+    artifact = stored_result(execution, plan)
     artifact_json = artifact.model_dump(mode="json")
     encoded = canonical_json(artifact_json)
     if len(encoded) > MAX_STORED_RESULT_BYTES:

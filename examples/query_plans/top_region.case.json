@@ -7,7 +7,7 @@
     "Show the top region by summed revenue, choosing the alphabetically first region if tied."
   ],
   "plan": {
-    "plan_version": 1,
+    "plan_version": 2,
     "dimensions": [
       "region"
     ],
@@ -25,7 +25,8 @@
         "direction": "desc"
       }
     ],
-    "limit": 1
+    "limit": 1,
+    "presentation": {"type": "table"}
   },
   "expected_columns": [
     "region",

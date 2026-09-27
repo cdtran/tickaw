@@ -132,6 +132,25 @@
       "title": "Ordering",
       "type": "object"
     },
+    "Presentation": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "table",
+            "bar",
+            "line"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "Presentation",
+      "type": "object"
+    },
     "RowCount": {
       "additionalProperties": false,
       "properties": {
@@ -157,7 +176,7 @@
   "additionalProperties": false,
   "properties": {
     "plan_version": {
-      "const": 1,
+      "const": 2,
       "title": "Plan Version",
       "type": "integer"
     },
@@ -239,6 +258,9 @@
       "minimum": 1,
       "title": "Limit",
       "type": "integer"
+    },
+    "presentation": {
+      "$ref": "#/$defs/Presentation"
     }
   },
   "required": [
@@ -247,7 +269,8 @@
     "metrics",
     "filters",
     "order_by",
-    "limit"
+    "limit",
+    "presentation"
   ],
   "title": "QueryPlan",
   "type": "object"

@@ -20,12 +20,13 @@ def profile(tmp_path, values):
 
 def query():
     return {
-        "plan_version": 1,
+        "plan_version": 2,
         "dimensions": ["when"],
         "metrics": [{"op": "sum", "column": "revenue", "alias": "total"}],
         "filters": [],
         "order_by": [],
         "limit": 100,
+        "presentation": {"type": "line"},
     }
 
 
@@ -171,6 +172,7 @@ def test_timestamp_min_max(tmp_path):
             {"op": "min", "column": "when", "alias": "first"},
             {"op": "max", "column": "when", "alias": "last"},
         ],
+        "presentation": {"type": "table"},
     }
     executed = execute_plan(
         payload,

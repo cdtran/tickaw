@@ -8,7 +8,7 @@
     "Break down total revenue by region."
   ],
   "plan": {
-    "plan_version": 1,
+    "plan_version": 2,
     "dimensions": [
       "region"
     ],
@@ -21,7 +21,8 @@
     ],
     "filters": [],
     "order_by": [],
-    "limit": 100
+    "limit": 100,
+    "presentation": {"type": "bar"}
   },
   "expected_columns": [
     "region",

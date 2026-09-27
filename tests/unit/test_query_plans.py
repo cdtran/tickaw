@@ -19,12 +19,13 @@ COLUMNS = FIXTURE["columns"]
 
 def basic():
     return {
-        "plan_version": 1,
+        "plan_version": 2,
         "dimensions": ["region"],
         "metrics": [{"op": "sum", "column": "revenue", "alias": "total_revenue"}],
         "filters": [],
         "order_by": [],
         "limit": 100,
+        "presentation": {"type": "bar"},
     }
 
 
@@ -53,9 +54,11 @@ def test_known_answers(case, db):
     [
         {"sql": "SELECT 1"},
         {"source": "/etc/passwd"},
-        {"plan_version": 2},
+        {"plan_version": 1},
         {"plan_version": True},
-        {"plan_version": 1.0},
+        {"plan_version": 2.0},
+        {"presentation": {"type": "pie"}},
+        {"presentation": {"type": "bar", "x": "region"}},
         {"limit": True},
         {"limit": "10"},
         {"limit": 0},
@@ -103,6 +106,12 @@ def test_every_field_is_required(field):
         {"filters": [{"column": "sold_on", "op": "eq", "value": "20250101"}]},
         {"order_by": [{"field": "revenue", "direction": "desc"}]},
         {"order_by": [{"field": "region", "direction": "asc"}] * 2},
+        {"dimensions": [], "presentation": {"type": "bar"}},
+        {"dimensions": ["region"], "presentation": {"type": "line"}},
+        {
+            "metrics": [{"op": "min", "column": "region", "alias": "first_region"}],
+            "presentation": {"type": "bar"},
+        },
     ],
 )
 def test_rejects_invalid_meaning(patch):
@@ -138,6 +147,7 @@ def test_comparison_operators(op, expected, db):
         "dimensions": [],
         "metrics": [{"op": "count_rows", "alias": "n"}],
         "filters": [{"column": "revenue", "op": op, "value": 10}],
+        "presentation": {"type": "table"},
     }
     assert db.execute(compile_sql(payload, COLUMNS)).fetchone() == (expected,)
 
@@ -156,6 +166,7 @@ def test_typed_and_quoted_values(condition, expected, db):
         "dimensions": [],
         "metrics": [{"op": "count_rows", "alias": "n"}],
         "filters": [condition],
+        "presentation": {"type": "table"},
     }
     assert db.execute(compile_sql(payload, COLUMNS)).fetchone() == (expected,)
 
@@ -178,6 +189,7 @@ def test_min_max_multigroup_and_null_aggregate(db):
             {"op": "min", "column": "revenue", "alias": "low"},
             {"op": "max", "column": "revenue", "alias": "high"},
         ],
+        "presentation": {"type": "table"},
     }
     assert db.execute(compile_sql(payload, COLUMNS)).fetchall() == [
         ("East", "A", 5, 15),
@@ -207,6 +219,7 @@ def test_integer_filters_are_not_coerced():
         "dimensions": [],
         "metrics": [{"op": "count_rows", "alias": "n"}],
         "filters": [{"column": "quantity", "op": "eq", "value": 2}],
+        "presentation": {"type": "table"},
     }
     with duckdb.connect(":memory:") as connection:
         connection.execute("CREATE TABLE dataset(quantity INTEGER)")
@@ -221,6 +234,7 @@ def test_fractional_and_negative_values():
     payload = basic() | {
         "dimensions": [],
         "filters": [{"column": "revenue", "op": "gte", "value": -0.5}],
+        "presentation": {"type": "table"},
     }
     with duckdb.connect(":memory:") as connection:
         connection.execute("CREATE TABLE dataset(revenue DOUBLE)")
@@ -232,7 +246,7 @@ def test_fractional_and_negative_values():
 def test_decimal_aggregation_preserves_precision():
     from decimal import Decimal
 
-    payload = basic() | {"dimensions": []}
+    payload = basic() | {"dimensions": [], "presentation": {"type": "table"}}
     with duckdb.connect(":memory:") as connection:
         connection.execute("CREATE TABLE dataset(revenue DECIMAL(10, 2))")
         connection.execute("INSERT INTO dataset VALUES (0.10), (0.20), (NULL)")
@@ -259,5 +273,6 @@ def test_physical_empty_table(db):
             {"op": "sum", "column": "revenue", "alias": "total"},
             {"op": "count_rows", "alias": "n"},
         ],
+        "presentation": {"type": "table"},
     }
     assert db.execute(compile_sql(payload, COLUMNS)).fetchall() == [(None, 0)]

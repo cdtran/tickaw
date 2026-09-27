@@ -26,14 +26,14 @@ class ChartSpec(ChartModel):
     missing_periods: Literal["none", "zero"] = "none"
 
 
-def chart_spec_for(table: TableResult) -> ChartSpec | None:
-    """Choose a chart only for one dimension and a small numeric result.
+def chart_spec_for(table: TableResult, chart_type: Literal["table", "bar", "line"]) -> ChartSpec | None:
+    """Build the requested chart only when the executed result remains compatible.
 
     Exact large integers are excluded because converting them to browser numbers
     would lose precision. Missing-period behavior reflects the executed result;
     the query planner will set zero once temporal gap filling is implemented.
     """
-    if not table.rows or len(table.rows) > CHART_ROW_LIMIT:
+    if chart_type == "table" or not table.rows or len(table.rows) > CHART_ROW_LIMIT:
         return None
     metrics = [
         column
@@ -53,9 +53,14 @@ def chart_spec_for(table: TableResult) -> ChartSpec | None:
         "timestamp_tz",
     }:
         return None
-    kind = "line" if dimension.logical_type in {"date", "timestamp", "timestamp_tz"} else "bar"
+    if chart_type == "line" and dimension.logical_type not in {
+        "date",
+        "timestamp",
+        "timestamp_tz",
+    }:
+        return None
     return ChartSpec(
-        type=kind,
+        type=chart_type,
         x=dimension.name,
         series=[ChartSeries(column=column.name, label=column.name) for column in metrics],
     )

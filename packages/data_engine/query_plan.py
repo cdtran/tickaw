@@ -1,4 +1,4 @@
-"""Version 1 of the model-facing aggregate query language.
+"""Version 2 of the model-facing aggregate query language.
 
 This module validates structure and meaning against a server-owned column catalog.
 It has no LLM, database, or storage dependencies.
@@ -53,19 +53,24 @@ class Ordering(StrictModel):
     direction: Literal["asc", "desc"]
 
 
+class Presentation(StrictModel):
+    type: Literal["table", "bar", "line"]
+
+
 class QueryPlan(StrictModel):
-    plan_version: Literal[1]
+    plan_version: Literal[2]
     dimensions: Annotated[list[Name], Field(max_length=8)]
     metrics: Annotated[list[Metric], Field(min_length=1, max_length=16)]
     filters: Annotated[list[Filter], Field(max_length=20)]
     order_by: Annotated[list[Ordering], Field(max_length=8)]
     limit: Annotated[int, Field(ge=1, le=1000)]
+    presentation: Presentation
 
     @field_validator("plan_version", mode="before")
     @classmethod
     def strict_version(cls, value):
         if type(value) is not int:
-            raise ValueError("plan_version must be the integer 1")
+            raise ValueError("plan_version must be the integer 2")
         return value
 
 
@@ -111,7 +116,7 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
         if metric.op in {"sum", "avg"} and kind not in {"integer", "number"}:
             raise PlanError(f"{metric.op} requires a numeric column")
         if metric.op in {"min", "max"} and kind == "boolean":
-            raise PlanError("min/max on booleans is not supported in v1")
+            raise PlanError("min/max on booleans is not supported in v2")
 
     for condition in plan.filters:
         kind = column_type(condition.column)
@@ -145,4 +150,19 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
         raise PlanError("Duplicate ordering fields")
     if not set(ordered) <= outputs:
         raise PlanError("Ordering must reference a grouping column or metric alias")
+
+    if plan.presentation.type != "table":
+        if len(plan.dimensions) != 1:
+            raise PlanError("Charts require exactly one grouping column")
+        if not 1 <= len(plan.metrics) <= 4:
+            raise PlanError("Charts require between one and four metrics")
+        for metric in plan.metrics:
+            if isinstance(metric, RowCount) or metric.op in {"count_non_null", "sum", "avg"}:
+                continue
+            if column_type(metric.column) not in {"integer", "number"}:
+                raise PlanError("Charts require numeric metric outputs")
+        if plan.presentation.type == "line":
+            dimension_type = column_type(plan.dimensions[0])
+            if dimension_type not in {"date", "timestamp", "timestamp_tz"}:
+                raise PlanError("Line charts require a date or timestamp grouping column")
     return plan

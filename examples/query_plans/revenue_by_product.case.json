@@ -7,7 +7,7 @@
     "Sum revenue for each product."
   ],
   "plan": {
-    "plan_version": 1,
+    "plan_version": 2,
     "dimensions": [
       "product"
     ],
@@ -20,7 +20,8 @@
     ],
     "filters": [],
     "order_by": [],
-    "limit": 100
+    "limit": 100,
+    "presentation": {"type": "bar"}
   },
   "expected_columns": [
     "product",

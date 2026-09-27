@@ -34,12 +34,13 @@ def rejected(session, operation):
 def main():
     plan = QueryPlan.model_validate(
         {
-            "plan_version": 1,
+            "plan_version": 2,
             "dimensions": ["region"],
             "metrics": [{"op": "sum", "column": "revenue", "alias": "total_revenue"}],
             "filters": [],
             "order_by": [],
             "limit": 100,
+            "presentation": {"type": "bar"},
         }
     )
     with get_session_factory()() as session:
@@ -104,7 +105,7 @@ def main():
                 execution_id=str(run.id),
                 dataset_version_id=str(version.id),
                 plan_sha256=run.plan_sha256,
-                plan_version=1,
+                plan_version=2,
                 compiler_version="2",
                 executor_version="2",
                 sqlglot_version="28.10.1",

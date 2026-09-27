@@ -7,7 +7,7 @@
     "Count all records and the records with non-null revenue."
   ],
   "plan": {
-    "plan_version": 1,
+    "plan_version": 2,
     "dimensions": [],
     "metrics": [
       {
@@ -22,7 +22,8 @@
     ],
     "filters": [],
     "order_by": [],
-    "limit": 100
+    "limit": 100,
+    "presentation": {"type": "table"}
   },
   "expected_columns": [
     "row_count",
