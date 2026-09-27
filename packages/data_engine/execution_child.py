@@ -39,6 +39,10 @@ def logical_type(database_type: str) -> str:
         return "boolean"
     if database_type == "DATE":
         return "date"
+    if database_type in {"TIMESTAMP", "TIMESTAMP_S", "TIMESTAMP_MS"}:
+        return "timestamp"
+    if database_type == "TIMESTAMP WITH TIME ZONE":
+        return "timestamp_tz"
     raise ExecutionProblem("UNSUPPORTED_TYPE", "The dataset contains an unsupported database type.")
 
 
@@ -57,7 +61,7 @@ def apply_process_limits(policy):
 def execution_connection(policy):
     import duckdb
 
-    return duckdb.connect(
+    connection = duckdb.connect(
         ":memory:",
         config={
             "threads": 1,
@@ -67,6 +71,9 @@ def execution_connection(policy):
             "autoload_known_extensions": False,
         },
     )
+
+    connection.execute("SET TimeZone = 'UTC'")
+    return connection
 
 
 def encode_table(description, raw_rows, plan, catalog, truncated):
@@ -106,6 +113,8 @@ def encode_table(description, raw_rows, plan, catalog, truncated):
             encoding = "integer_string"
         elif kind == "date":
             encoding = "iso_date"
+        elif kind in {"timestamp", "timestamp_tz"}:
+            encoding = "iso_timestamp"
         encoded = []
         for value in values:
             if value is None:

@@ -10,7 +10,7 @@ from packages.data_engine.query_plan import (
     validate_plan,
 )
 
-COMPILER_VERSION = "1"
+COMPILER_VERSION = "2"
 SUPPORTED_DIALECTS = frozenset({"duckdb"})
 AGGREGATES = {
     "sum": exp.Sum,
@@ -40,8 +40,13 @@ def literal(value, kind: ColumnType) -> exp.Expression:
     if kind in {"integer", "number"}:
         return exp.Literal.number(value)
     node = exp.Literal.string(value)
-    if kind == "date":
-        return exp.Cast(this=node, to=exp.DataType(this=exp.DataType.Type.DATE))
+    temporal_types = {
+        "date": exp.DataType.Type.DATE,
+        "timestamp": exp.DataType.Type.TIMESTAMP,
+        "timestamp_tz": exp.DataType.Type.TIMESTAMPTZ,
+    }
+    if kind in temporal_types:
+        return exp.Cast(this=node, to=exp.DataType(this=temporal_types[kind]))
     return node
 
 

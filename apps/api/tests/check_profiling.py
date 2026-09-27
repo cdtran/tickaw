@@ -10,13 +10,13 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pandas as pd
+from app.db.session import get_session_factory
+from app.models import DatasetVersion, ProfilingJob
+from app.workers.profiling import run_job
 from botocore.exceptions import EndpointConnectionError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.session import get_session_factory
-from app.models import DatasetVersion, ProfilingJob
-from app.workers.profiling import run_job
 from packages.data_engine.profiling import ProfileError, profile_csv
 from tests import check_uploads
 
@@ -39,7 +39,7 @@ class ProfilerTests(unittest.TestCase):
         result, frame = self.profile(GOLDEN)
         self.assertEqual(result["row_count"], 3)
         self.assertEqual([c["inferred_type"] for c in result["schema_json"]["columns"]],
-                         ["string", "integer", "boolean", "string", "unknown", "string"])
+                         ["string", "integer", "boolean", "string", "unknown", "date"])
         self.assertEqual([c["null_count"] for c in result["profile_json"]["columns"]], [0, 1, 0, 0, 3, 0])
         self.assertEqual(result["profile_json"]["columns"][1]["sample_values"], [120, 180])
         self.assertEqual(result["preview_json"][1], {"category": "Games", "revenue": None,
@@ -218,7 +218,7 @@ class WorkerTests(check_uploads.UploadTests):
                     self.assertEqual(result["preview_json"], case["preview"])
                     self.assertEqual([c["inferred_type"] for c in result["schema_json"]["columns"]], case["types"])
                     self.assertEqual([c["null_count"] for c in result["profile_json"]["columns"]], case["nulls"])
-                    self.assertEqual(result["profile_json"]["profiler_version"], "csv-v2")
+                    self.assertEqual(result["profile_json"]["profiler_version"], "csv-v3")
                 else:
                     self.assertEqual(result["error_code"], case["error_code"])
                     self.assertEqual(result["job"]["error_code"], case["error_code"])

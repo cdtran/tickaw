@@ -11,9 +11,11 @@ class ResultModel(BaseModel):
 
 class ResultColumn(ResultModel):
     name: str
-    logical_type: Literal["text", "integer", "number", "boolean", "date"]
+    logical_type: Literal[
+        "text", "integer", "number", "boolean", "date", "timestamp", "timestamp_tz"
+    ]
     database_type: str
-    encoding: Literal["json", "decimal_string", "integer_string", "iso_date"]
+    encoding: Literal["json", "decimal_string", "integer_string", "iso_date", "iso_timestamp"]
 
 
 class ResultCheck(ResultModel):

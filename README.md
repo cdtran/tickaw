@@ -7,7 +7,8 @@ The product name is **tickaw** (lowercase). Its domain is **tickaw.com**; domain
 ## Current functionality
 
 - CSV uploads with independent datasets and immutable dataset versions.
-- Background profiling into schema, samples, previews, and normalized Parquet.
+- Background profiling into schema, samples, previews, and normalized Parquet,
+  including conservative ISO date and timestamp recognition.
 - Persistent notebooks and question cells referencing an exact dataset version.
 
 The v1 aggregate query-plan schema, SQLGlot compiler, and isolated local Parquet executor are implemented with typed JSON results and known-answer DuckDB tests. See the [execution walkthrough](docs/query-execution.md). Notebook job integration, production deployment, charts, and LLM integration are upcoming milestones. The analysis flow is LLM-generated JSON plans, deterministic validation, application-owned SQLGlot AST compilation, target SQL execution, and result checks. See the [query-plan design](docs/query-plan.md).

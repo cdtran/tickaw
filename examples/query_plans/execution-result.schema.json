@@ -216,7 +216,9 @@
             "integer",
             "number",
             "boolean",
-            "date"
+            "date",
+            "timestamp",
+            "timestamp_tz"
           ],
           "title": "Logical Type",
           "type": "string"
@@ -230,7 +232,8 @@
             "json",
             "decimal_string",
             "integer_string",
-            "iso_date"
+            "iso_date",
+            "iso_timestamp"
           ],
           "title": "Encoding",
           "type": "string"

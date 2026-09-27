@@ -29,7 +29,7 @@ from packages.data_engine.result_types import (
     TableResult,
 )
 
-EXECUTOR_VERSION = "1"
+EXECUTOR_VERSION = "2"
 
 
 class ExecutionLimits(BaseModel):
@@ -59,6 +59,9 @@ def catalog_from_profile(schema: dict) -> dict[str, ColumnType]:
         "integer": "integer",
         "number": "number",
         "boolean": "boolean",
+        "date": "date",
+        "timestamp": "timestamp",
+        "timestamp_tz": "timestamp_tz",
     }
     if (
         not isinstance(schema, dict)

@@ -4,15 +4,16 @@ This module validates structure and meaning against a server-owned column catalo
 It has no LLM, database, or storage dependencies.
 """
 
-from datetime import date
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from packages.data_engine.temporal import parse_temporal
+
 Name = Annotated[str, Field(min_length=1, max_length=128)]
 Alias = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,62}$")]
 Scalar = Annotated[str, Field(max_length=4096)] | int | float | bool
-ColumnType = Literal["text", "integer", "number", "boolean", "date"]
+ColumnType = Literal["text", "integer", "number", "boolean", "date", "timestamp", "timestamp_tz"]
 
 
 class StrictModel(BaseModel):
@@ -80,7 +81,8 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
     """
     plan = QueryPlan.model_validate(payload)
     if not columns or any(
-        t not in {"text", "integer", "number", "boolean", "date"} for t in columns.values()
+        t not in {"text", "integer", "number", "boolean", "date", "timestamp", "timestamp_tz"}
+        for t in columns.values()
     ):
         raise PlanError("Catalog must contain supported logical column types")
     if len({name.casefold() for name in columns}) != len(columns):
@@ -122,16 +124,18 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
             "number": type(value) in {int, float},
             "boolean": type(value) is bool,
             "date": type(value) is str,
+            "timestamp": type(value) is str,
+            "timestamp_tz": type(value) is str,
         }[kind]
         if not valid:
             raise PlanError(f"Filter value does not match {condition.column}'s {kind} type")
-        if kind == "date":
+        if kind in {"date", "timestamp", "timestamp_tz"}:
             try:
-                parsed = date.fromisoformat(value)
-            except ValueError as error:
-                raise PlanError("Date values must be real ISO YYYY-MM-DD dates") from error
-            if parsed.isoformat() != value:
-                raise PlanError("Date values must use YYYY-MM-DD")
+                parsed_kind, _ = parse_temporal(value)
+            except (ValueError, OverflowError) as error:
+                raise PlanError("Filter requires a valid ISO date/timestamp") from error
+            if parsed_kind != kind:
+                raise PlanError("Filter must match the column's date/timestamp and timezone type")
         if kind == "boolean" and condition.op not in {"eq", "ne"}:
             raise PlanError("Boolean comparisons support only eq/ne")
 

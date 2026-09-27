@@ -252,7 +252,7 @@ def test_profile_catalog_mapping():
         "amount": "number",
         "yes": "boolean",
     }
-    schema["columns"].append({"name": "bad", "inferred_type": "timestamp"})
+    schema["columns"].append({"name": "bad", "inferred_type": "unsupported"})
     with pytest.raises(ValueError):
         catalog_from_profile(schema)
 
