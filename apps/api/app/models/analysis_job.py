@@ -4,7 +4,16 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Integer, Text, func, text
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,24 +40,61 @@ class AnalysisRun(Base):
         ),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        primary_key=True, default=uuid4, comment="Stable identifier for the analysis run."
+    )
     notebook_cell_id: Mapped[UUID] = mapped_column(
-        ForeignKey("notebook_cells.id", ondelete="RESTRICT"), index=True
+        ForeignKey("notebook_cells.id", ondelete="RESTRICT"),
+        index=True,
+        comment="Question cell that requested this analysis.",
     )
     dataset_version_id: Mapped[UUID] = mapped_column(
-        ForeignKey("dataset_versions.id", ondelete="RESTRICT"), index=True
+        ForeignKey("dataset_versions.id", ondelete="RESTRICT"),
+        index=True,
+        comment="Exact immutable dataset version used for execution.",
     )
-    status: Mapped[str] = mapped_column(Text, server_default=text("'QUEUED'"), index=True)
-    stable_model_id: Mapped[str | None] = mapped_column(Text)
-    prompt_version: Mapped[str | None] = mapped_column(Text)
-    plan_json: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    plan_sha256: Mapped[str] = mapped_column(Text)
-    result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
-    result_sha256: Mapped[str | None] = mapped_column(Text)
-    result_size_bytes: Mapped[int | None] = mapped_column(BigInteger)
-    result_version: Mapped[int | None] = mapped_column(Integer)
-    error_code: Mapped[str | None] = mapped_column(Text)
-    error_message: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(
+        Text,
+        server_default=text("'QUEUED'"),
+        index=True,
+        comment="Current analysis execution lifecycle state.",
+    )
+    stable_model_id: Mapped[str | None] = mapped_column(
+        Text, comment="Stable identifier for the model configuration that produced the plan."
+    )
+    prompt_version: Mapped[str | None] = mapped_column(
+        Text, comment="Version of the prompt used to produce the plan."
+    )
+    plan_json: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, comment="Normalized, validated model-generated query plan."
+    )
+    plan_sha256: Mapped[str] = mapped_column(
+        Text, comment="SHA-256 of the canonical normalized query plan."
+    )
+    result_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), comment="Bounded execution result and reconstructable chart spec."
+    )
+    result_sha256: Mapped[str | None] = mapped_column(
+        Text, comment="SHA-256 of the canonical persisted result artifact."
+    )
+    result_size_bytes: Mapped[int | None] = mapped_column(
+        BigInteger, comment="Canonical result artifact size in UTF-8 bytes."
+    )
+    result_version: Mapped[int | None] = mapped_column(
+        Integer, comment="Schema version of the persisted result artifact."
+    )
+    error_code: Mapped[str | None] = mapped_column(
+        Text, comment="Stable machine-readable failure code."
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text, comment="Safe human-readable failure description."
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), comment="Time the run was created."
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Time execution started."
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Time the run reached a terminal state."
+    )
