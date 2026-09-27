@@ -7,6 +7,7 @@ from app.db.session import get_session_factory
 from app.main import app
 from app.models import AnalysisRun, Dataset, DatasetVersion, Notebook, NotebookCell
 from app.services.analysis_service import complete_run, create_run, load_result
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -126,6 +127,56 @@ def main():
         response = client.get(f"/api/v1/analysis-runs/{run.id}/result")
         assert response.status_code == 200 and response.json()["chart"]["type"] == "bar"
         assert client.get(f"/api/v1/analysis-runs/{uuid4()}/result").status_code == 404
+
+        large_plan = QueryPlan.model_validate(
+            {
+                "plan_version": 2,
+                "dimensions": [],
+                "metrics": [{"op": "min", "column": "region", "alias": "first_region"}],
+                "filters": [],
+                "order_by": [],
+                "limit": 1,
+                "presentation": {"type": "table"},
+            }
+        )
+        large_run = create_run(session, cell.id, large_plan)
+        large_execution = ExecutionSuccess(
+            table=TableResult(
+                columns=[
+                    ResultColumn(
+                        name="first_region",
+                        logical_type="text",
+                        database_type="VARCHAR",
+                        encoding="json",
+                    )
+                ],
+                rows=[["x" * (2 * 1024**2)]],
+                returned_rows=1,
+                requested_limit=1,
+                truncated=False,
+                warnings=[],
+                checks=[],
+            ),
+            metadata=execution.metadata.model_copy(
+                update={
+                    "execution_id": str(large_run.id),
+                    "plan_sha256": large_run.plan_sha256,
+                    "plan_version": 2,
+                }
+            ),
+        )
+        try:
+            complete_run(session, large_run.id, large_execution)
+        except HTTPException as error:
+            assert error.status_code == 413
+        else:
+            raise AssertionError("Expected an oversized result to be rejected")
+        session.expire_all()
+        failed_run = session.get(AnalysisRun, large_run.id)
+        assert failed_run.status == "FAILED"
+        assert failed_run.error_code == "RESULT_TOO_LARGE"
+        assert failed_run.completed_at is not None
+        assert failed_run.result_json is None
 
         rejected(
             session,

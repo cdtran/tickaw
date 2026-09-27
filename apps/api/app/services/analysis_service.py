@@ -98,6 +98,14 @@ def complete_run(
     artifact_json = artifact.model_dump(mode="json")
     encoded = canonical_json(artifact_json)
     if len(encoded) > MAX_STORED_RESULT_BYTES:
+        run.status = "FAILED"
+        run.error_code = "RESULT_TOO_LARGE"
+        run.error_message = (
+            f"The structured analysis result is {len(encoded)} bytes; "
+            f"the storage limit is {MAX_STORED_RESULT_BYTES} bytes."
+        )
+        run.completed_at = datetime.now(UTC)
+        session.commit()
         raise HTTPException(413, "The structured analysis result exceeds the storage limit.")
 
     run.result_json = artifact_json
