@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import ResultCell, { PersistedResult } from "../components/notebook/ResultCell";
+import type { AnalysisRunSummary, ExecutionResult } from "../types/api";
 
 type Notebook = { id: string; title: string };
-type Cell = { id: string; question: string; dataset_version_id: string; status: string; created_at: string };
+type Cell = { id: string; question: string; dataset_version_id: string; status: string; created_at: string; result?: ExecutionResult | null; latest_analysis?: AnalysisRunSummary | null };
 type Detail = Notebook & { cells: Cell[] };
 type Dataset = { id: string; name: string; versions: { id: string; version_number: number; status: string }[] };
 
@@ -92,6 +94,8 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
           <h3>Question {index + 1}</h3><p className="question-text">{cell.question}</p>
           <p className="hint">{versions.find(item => item.id === cell.dataset_version_id)?.label ?? cell.dataset_version_id}</p>
           <p className="hint">Saved · {new Date(cell.created_at).toLocaleString()}</p>
+          {cell.result && <ResultCell result={cell.result} />}
+          {!cell.result && cell.latest_analysis && <PersistedResult analysis={cell.latest_analysis} />}
         </article>)}
       </section>
     </> : !notebookId && <>

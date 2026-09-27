@@ -7,3 +7,6 @@ __all__ = ["Dataset", "DatasetVersion", "ProfilingJob"]
 
 from app.models.notebook import Notebook, NotebookCell
 __all__ += ["Notebook", "NotebookCell"]
+
+from app.models.analysis_job import AnalysisRun
+__all__ += ["AnalysisRun"]

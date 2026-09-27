@@ -1,7 +1,11 @@
 """Only user input is writable; IDs, status and timestamps are server-owned."""
+
 from datetime import datetime
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.analysis import AnalysisRunSummary
 
 
 class NotebookCreate(BaseModel):
@@ -32,6 +36,7 @@ class CellResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    latest_analysis: AnalysisRunSummary | None = None
 
 
 class NotebookDetail(NotebookResponse):
