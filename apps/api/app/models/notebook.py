@@ -45,6 +45,9 @@ class NotebookCell(Base):
         comment="Exact immutable dataset version used by the question.",
     )
     question: Mapped[str] = mapped_column(Text, comment="User's natural-language question.")
+    stable_model_id: Mapped[str] = mapped_column(
+        Text, comment="Stable model configuration selected when the question was submitted."
+    )
     status: Mapped[str] = mapped_column(
         Text, server_default=text("'SAVED'"), comment="Question-cell lifecycle state."
     )

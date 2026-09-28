@@ -17,6 +17,7 @@ class QuestionCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     question: str = Field(min_length=1, max_length=4000)
     dataset_version_id: UUID
+    stable_model_id: str = Field(min_length=1, max_length=100)
 
 
 class NotebookResponse(BaseModel):
@@ -33,6 +34,7 @@ class CellResponse(BaseModel):
     notebook_id: UUID
     dataset_version_id: UUID
     question: str
+    stable_model_id: str
     status: str
     created_at: datetime
     updated_at: datetime

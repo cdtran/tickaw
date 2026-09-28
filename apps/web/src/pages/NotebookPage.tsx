@@ -1,20 +1,25 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import ResultCell, { PersistedResult } from "../components/notebook/ResultCell";
+import ModelSelector, { SelectableModel } from "../components/shared/ModelSelector";
 import type { AnalysisRunSummary, ExecutionResult } from "../types/api";
 
 type Notebook = { id: string; title: string };
-type Cell = { id: string; question: string; dataset_version_id: string; status: string; created_at: string; result?: ExecutionResult | null; latest_analysis?: AnalysisRunSummary | null };
+type Cell = { id: string; question: string; dataset_version_id: string; stable_model_id: string; status: string; created_at: string; result?: ExecutionResult | null; latest_analysis?: AnalysisRunSummary | null };
 type Detail = Notebook & { cells: Cell[] };
 type Dataset = { id: string; name: string; versions: { id: string; version_number: number; status: string }[] };
+type PlanDraft = { plan: object; stable_model_id: string; provider: string; provider_model: string; prompt_version: string };
 
 async function request<T>(url: string, body?: object): Promise<T> {
   const response = await fetch(`/api/v1/${url}`, body ? {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   } : undefined);
-  const data = await response.json();
+  const text = await response.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* handled below */ }
   if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Please check your input and try again.");
-  return data;
+  if (data === null) throw new Error("The server returned an unreadable response. Please try again.");
+  return data as T;
 }
 
 async function allPages<T>(resource: string): Promise<T[]> {
@@ -30,18 +35,24 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [models, setModels] = useState<SelectableModel[]>([]);
   const [title, setTitle] = useState("");
   const [question, setQuestion] = useState("");
   const [version, setVersion] = useState("");
+  const [modelId, setModelId] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, PlanDraft>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(""); setDetail(null); setQuestion(""); setVersion("");
-    Promise.all([allPages<Notebook>("notebooks"), allPages<Dataset>("datasets"),
+    Promise.all([allPages<Notebook>("notebooks"), allPages<Dataset>("datasets"), request<SelectableModel[]>("models"),
       notebookId ? request<Detail>(`notebooks/${encodeURIComponent(notebookId)}`) : Promise.resolve(null)])
-      .then(([items, sources, opened]) => { if (active) { setNotebooks(items); setDatasets(sources); setDetail(opened); } })
+      .then(([items, sources, availableModels, opened]) => { if (active) {
+        setNotebooks(items); setDatasets(sources); setModels(availableModels); setDetail(opened);
+        setModelId(current => current || availableModels[0]?.id || "");
+      } })
       .catch(reason => { if (active) setError(reason.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -61,9 +72,17 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
     event.preventDefault(); if (!detail) return;
     setBusy(true); setError("");
     try {
-      const cell = await request<Cell>(`notebooks/${detail.id}/cells`, { question: question.trim(), dataset_version_id: version });
+      const cell = await request<Cell>(`notebooks/${detail.id}/cells`, {
+        question: question.trim(), dataset_version_id: version, stable_model_id: modelId,
+      });
       setDetail(previous => previous ? { ...previous, cells: [...previous.cells, cell] } : previous);
       setQuestion("");
+      try {
+        const draft = await request<PlanDraft>(`notebooks/${detail.id}/cells/${cell.id}/plan`, {});
+        setDrafts(previous => ({ ...previous, [cell.id]: draft }));
+      } catch (reason) {
+        setError(`Question saved, but plan generation failed: ${reason instanceof Error ? reason.message : "Please try again."}`);
+      }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save question."); }
     finally { setBusy(false); }
   }
@@ -74,8 +93,9 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
     {error && <p role="alert" className="error">{error}</p>}
     {loading ? <p role="status">Loading notebook…</p> : detail ? <>
       <section className="upload-panel"><h2>New question</h2>
-        <p className="hint">Questions are saved here. Analysis execution will arrive in the next milestones.</p>
+        <p className="hint">The question is pinned to the selected dataset version and model before a plan is requested.</p>
         <form onSubmit={save}>
+          <ModelSelector models={models} value={modelId} disabled={busy} onChange={setModelId} />
           <label htmlFor="question-version">Dataset version</label>
           <select id="question-version" required value={version} disabled={busy} onChange={event => setVersion(event.target.value)}>
             <option value="">Choose a profiled dataset version</option>
@@ -85,7 +105,7 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
           <label htmlFor="question">Question</label>
           <textarea id="question" rows={4} maxLength={4000} required value={question} disabled={busy}
             placeholder="Which region had the most revenue?" onChange={event => setQuestion(event.target.value)} />
-          <button disabled={busy || !version || !question.trim()}>{busy ? "Saving…" : "Save question"}</button>
+          <button disabled={busy || !modelId || !version || !question.trim()}>{busy ? "Submitting…" : "Ask question"}</button>
         </form>
       </section>
       <section aria-label="Saved questions"><h2>Questions</h2>
@@ -93,7 +113,12 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
         {detail.cells.map((cell, index) => <article className="dataset" key={cell.id}>
           <h3>Question {index + 1}</h3><p className="question-text">{cell.question}</p>
           <p className="hint">{versions.find(item => item.id === cell.dataset_version_id)?.label ?? cell.dataset_version_id}</p>
+          <p className="hint">Model · {models.find(model => model.id === cell.stable_model_id)?.label ?? cell.stable_model_id}</p>
           <p className="hint">Saved · {new Date(cell.created_at).toLocaleString()}</p>
+          {drafts[cell.id] && <details><summary>Generated query plan</summary>
+            <pre>{JSON.stringify(drafts[cell.id].plan, null, 2)}</pre>
+            <p className="hint">Draft only · semantic validation and execution are not enabled yet.</p>
+          </details>}
           {cell.result && <ResultCell result={cell.result} />}
           {!cell.result && cell.latest_analysis && <PersistedResult analysis={cell.latest_analysis} />}
         </article>)}

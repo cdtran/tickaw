@@ -1,5 +1,9 @@
-"""Provider adapter protocol.
+"""Provider adapter protocol; provider SDK types never cross this boundary."""
 
-Each adapter will translate normalized contracts into its provider SDK’s request
-format and return normalized contracts. SDK types must not escape this module.
-"""
+from typing import Protocol
+
+from packages.llm_gateway.contracts import ModelRoute, PlanRequest, PlanResponse
+
+
+class ProviderAdapter(Protocol):
+    def generate_plan(self, route: ModelRoute, request: PlanRequest) -> PlanResponse: ...

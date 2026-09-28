@@ -1,12 +1,24 @@
 """Create and reopen notebooks and persist question cells."""
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.db.session import get_db
 from app.models import Notebook
-from app.schemas.notebook import NotebookCreate, NotebookResponse, NotebookDetail, QuestionCreate, CellResponse
+from app.schemas.model import PlanDraftResponse
+from app.schemas.notebook import (
+    CellResponse,
+    NotebookCreate,
+    NotebookDetail,
+    NotebookResponse,
+    QuestionCreate,
+)
 from app.services import notebook_service
+from app.services.llm_service import get_llm_gateway
+from app.services.plan_service import generate_draft
+from packages.llm_gateway.gateway import LLMGateway
 
 router = APIRouter(prefix="/notebooks", tags=["notebooks"])
 
@@ -34,3 +46,13 @@ def get_notebook(notebook_id: UUID, session: Session = Depends(get_db)):
 @router.post("/{notebook_id}/cells", response_model=CellResponse, status_code=201)
 def add_question(notebook_id: UUID, request: QuestionCreate, session: Session = Depends(get_db)):
     return notebook_service.add_question(session, notebook_id, request)
+
+
+@router.post("/{notebook_id}/cells/{cell_id}/plan", response_model=PlanDraftResponse)
+def draft_plan(
+    notebook_id: UUID,
+    cell_id: UUID,
+    session: Session = Depends(get_db),
+    gateway: LLMGateway = Depends(get_llm_gateway),
+):
+    return generate_draft(session, notebook_id, cell_id, gateway)

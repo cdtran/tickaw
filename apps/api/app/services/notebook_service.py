@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.models import AnalysisRun, DatasetVersion, Notebook, NotebookCell
 from app.schemas.analysis import AnalysisRunSummary
 from app.schemas.notebook import CellResponse, NotebookDetail, QuestionCreate
+from app.services.llm_service import get_model_registry
+from packages.llm_gateway.registry import UnknownModelError
 
 
 def get_notebook(session: Session, notebook_id: UUID) -> Notebook:
@@ -59,8 +61,15 @@ def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -
         raise HTTPException(404, "Dataset version not found.")
     if version.status != "READY":
         raise HTTPException(409, "Choose a dataset version that has finished profiling (READY).")
+    try:
+        get_model_registry().resolve(request.stable_model_id)
+    except UnknownModelError as error:
+        raise HTTPException(422, str(error)) from error
     cell = NotebookCell(
-        notebook_id=notebook.id, dataset_version_id=version.id, question=request.question
+        notebook_id=notebook.id,
+        dataset_version_id=version.id,
+        question=request.question,
+        stable_model_id=request.stable_model_id,
     )
     session.add(cell)
     notebook.updated_at = func.now()
