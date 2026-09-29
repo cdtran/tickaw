@@ -361,6 +361,9 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
     }} />;
   }
   if (error) return <p role="alert" className="error">{error}</p>;
-  if (!artifact) return <p role="status" className="hint">Analysis {run.status.toLowerCase()}…</p>;
+  if (!artifact) {
+    const stage = run.processing_stage.toLowerCase().replaceAll("_", " ");
+    return <p role="status" className="hint">Analysis {stage}…</p>;
+  }
   return <ResultCell result={artifact.execution} chartSpec={artifact.chart} />;
 }

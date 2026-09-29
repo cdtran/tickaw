@@ -42,7 +42,7 @@ def stored_result(execution: ExecutionSuccess, plan: QueryPlan) -> StoredAnalysi
 def create_run(
     session: Session,
     cell_id: UUID,
-    plan: QueryPlan,
+    plan: QueryPlan | None = None,
     *,
     stable_model_id: str | None = None,
     prompt_version: str | None = None,
@@ -56,20 +56,32 @@ def create_run(
         raise HTTPException(404, "Dataset version not found.")
     if version.status != "READY":
         raise HTTPException(409, "The pinned dataset version is not analysis-ready.")
-    normalized = plan.model_dump(mode="json")
+    normalized = plan.model_dump(mode="json") if plan is not None else None
     run = AnalysisRun(
         notebook_cell_id=cell.id,
         dataset_version_id=cell.dataset_version_id,
         status="QUEUED",
-        stable_model_id=stable_model_id,
+        processing_stage="QUEUED",
+        stable_model_id=stable_model_id or cell.stable_model_id,
         prompt_version=prompt_version,
         plan_json=normalized,
-        plan_sha256=sha256_json(normalized),
+        plan_sha256=sha256_json(normalized) if normalized is not None else None,
     )
     session.add(run)
     session.commit()
     session.refresh(run)
     return run
+
+
+def queued_run_for_cell(cell: NotebookCell) -> AnalysisRun:
+    """Build a plan-less queue row for insertion with its question cell."""
+    return AnalysisRun(
+        notebook_cell_id=cell.id,
+        dataset_version_id=cell.dataset_version_id,
+        status="QUEUED",
+        processing_stage="QUEUED",
+        stable_model_id=cell.stable_model_id,
+    )
 
 
 def start_run(session: Session, run_id: UUID) -> AnalysisRun:
@@ -80,7 +92,45 @@ def start_run(session: Session, run_id: UUID) -> AnalysisRun:
     if run.status != "QUEUED":
         raise HTTPException(409, "Only a queued analysis run can be started.")
     run.status = "PROCESSING"
+    run.processing_stage = "GENERATING_PLAN" if run.plan_json is None else "DOWNLOADING_DATA"
+    run.attempt_count += 1
     run.started_at = datetime.now(UTC)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def store_plan(
+    session: Session,
+    run_id: UUID,
+    plan: QueryPlan,
+    *,
+    stable_model_id: str,
+    prompt_version: str,
+) -> AnalysisRun:
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None:
+        raise HTTPException(404, "Analysis run not found.")
+    if run.status != "PROCESSING" or run.plan_json is not None:
+        raise HTTPException(409, "This analysis run cannot accept a generated plan.")
+    normalized = plan.model_dump(mode="json")
+    run.plan_json = normalized
+    run.plan_sha256 = sha256_json(normalized)
+    run.stable_model_id = stable_model_id
+    run.prompt_version = prompt_version
+    run.processing_stage = "DOWNLOADING_DATA"
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def set_processing_stage(session: Session, run_id: UUID, stage: str) -> AnalysisRun:
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None:
+        raise HTTPException(404, "Analysis run not found.")
+    if run.status != "PROCESSING":
+        raise HTTPException(409, "Only a processing run has an active stage.")
+    run.processing_stage = stage
     session.commit()
     session.refresh(run)
     return run
@@ -112,6 +162,7 @@ def complete_run(
     encoded = canonical_json(artifact_json)
     if len(encoded) > MAX_STORED_RESULT_BYTES:
         run.status = "FAILED"
+        run.processing_stage = "FAILED"
         run.error_code = "RESULT_TOO_LARGE"
         run.error_message = (
             f"The structured analysis result is {len(encoded)} bytes; "
@@ -126,6 +177,7 @@ def complete_run(
     run.result_size_bytes = len(encoded)
     run.result_version = artifact.artifact_version
     run.status = "SUCCEEDED"
+    run.processing_stage = "COMPLETED"
     run.completed_at = datetime.now(UTC)
     session.commit()
     session.refresh(run)
@@ -139,6 +191,7 @@ def fail_run(session: Session, run_id: UUID, code: str, message: str) -> Analysi
     if run.status not in {"QUEUED", "PROCESSING"}:
         raise HTTPException(409, "This analysis run is already terminal.")
     run.status = "FAILED"
+    run.processing_stage = "FAILED"
     run.error_code = code
     run.error_message = message
     run.completed_at = datetime.now(UTC)

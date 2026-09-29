@@ -6,20 +6,32 @@ import time
 from pathlib import Path
 from uuid import UUID
 
+import psycopg
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import create_engine, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.db.session import get_session_factory
 from app.models import AnalysisRun, DatasetVersion
-from app.services.analysis_service import complete_run, fail_run, start_run
+from app.services.analysis_service import (
+    complete_run,
+    fail_run,
+    set_processing_stage,
+    start_run,
+    store_plan,
+)
+from app.services.llm_service import get_llm_gateway
 from app.services.object_storage import get_storage_client
+from app.services.plan_service import PlanGenerationError, generate_plan
 from packages.data_engine.execution import ExecutionLimits, catalog_from_profile, execute_plan
 from packages.data_engine.result_types import ExecutionFailure
 
 logger = logging.getLogger(__name__)
+QUEUE_CHANNEL = "analysis_run_queued"
+RECOVERY_SCAN_SECONDS = 30.0
 
 
 class AnalysisProcessingError(Exception):
@@ -74,6 +86,15 @@ def process_run(session: Session, run_id: UUID) -> None:
         run = start_run(session, run_id)
     elif run.status != "PROCESSING":
         return
+    if run.plan_json is None:
+        plan, response = generate_plan(session, run, get_llm_gateway())
+        run = store_plan(
+            session,
+            run.id,
+            plan,
+            stable_model_id=response.stable_model_id,
+            prompt_version=response.prompt_version,
+        )
     version = session.get(DatasetVersion, run.dataset_version_id)
     if version is None or version.status != "READY":
         raise AnalysisProcessingError(
@@ -88,6 +109,7 @@ def process_run(session: Session, run_id: UUID) -> None:
     with tempfile.TemporaryDirectory(prefix="tickaw-analysis-") as directory:
         parquet = Path(directory) / "dataset.parquet"
         download_snapshot(version, parquet)
+        set_processing_stage(session, run.id, "EXECUTING")
         result = execute_plan(
             run.plan_json,
             parquet_path=parquet,
@@ -117,6 +139,8 @@ def run_job(run_id: UUID) -> bool:
                     try:
                         process_run(session, run.id)
                     except AnalysisProcessingError as error:
+                        fail_run(session, run.id, error.code, str(error))
+                    except PlanGenerationError as error:
                         fail_run(session, run.id, error.code, str(error))
                     except (BotoCoreError, ClientError):
                         logger.exception("Storage failure analysis_run=%s", run.id)
@@ -161,14 +185,34 @@ def run_once() -> bool:
     return False
 
 
+def listener_connection() -> psycopg.Connection:
+    """Open the dedicated autocommit connection required by LISTEN/NOTIFY."""
+    url = make_url(get_settings().database_url.get_secret_value()).set(drivername="postgresql")
+    connection = psycopg.connect(url.render_as_string(hide_password=False), autocommit=True)
+    connection.execute(f"LISTEN {QUEUE_CHANNEL}")
+    return connection
+
+
+def wait_for_notification(connection: psycopg.Connection) -> None:
+    """Wait for a queue wake-up, with a recovery scan timeout for missed events."""
+    next(
+        connection.notifies(timeout=RECOVERY_SCAN_SECONDS, stop_after=1),
+        None,
+    )
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     while True:
         try:
-            if run_once():
-                continue
+            with listener_connection() as listener:
+                logger.info("Listening for analysis work on PostgreSQL channel=%s", QUEUE_CHANNEL)
+                while True:
+                    while run_once():
+                        pass
+                    wait_for_notification(listener)
         except Exception:
-            logger.exception("Analysis worker iteration failed; queued runs remain durable")
+            logger.exception("Analysis queue listener failed; queued runs remain durable")
         time.sleep(1)
 
 

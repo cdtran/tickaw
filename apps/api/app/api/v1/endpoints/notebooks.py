@@ -16,9 +16,7 @@ from app.schemas.notebook import (
     QuestionCreate,
 )
 from app.services import notebook_service
-from app.services.llm_service import get_llm_gateway
-from app.services.plan_service import generate_draft
-from packages.llm_gateway.gateway import LLMGateway
+from app.services.analysis_service import create_run
 
 router = APIRouter(prefix="/notebooks", tags=["notebooks"])
 
@@ -57,6 +55,6 @@ def draft_plan(
     notebook_id: UUID,
     cell_id: UUID,
     session: Session = Depends(get_db),
-    gateway: LLMGateway = Depends(get_llm_gateway),
 ):
-    return generate_draft(session, notebook_id, cell_id, gateway)
+    cell = notebook_service.get_cell(session, notebook_id, cell_id)
+    return create_run(session, cell.id)

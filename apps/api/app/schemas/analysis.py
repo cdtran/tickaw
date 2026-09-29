@@ -23,7 +23,9 @@ class AnalysisRunSummary(BaseModel):
 
     id: UUID
     status: str
-    plan_sha256: str
+    processing_stage: str
+    attempt_count: int
+    plan_sha256: str | None
     result_sha256: str | None
     error_code: str | None
     error_message: str | None

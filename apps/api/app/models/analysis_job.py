@@ -24,7 +24,8 @@ class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
     __table_args__ = (
         CheckConstraint("status IN ('QUEUED', 'PROCESSING', 'SUCCEEDED', 'FAILED')", name="status"),
-        CheckConstraint("length(plan_sha256) = 64", name="plan_hash"),
+        CheckConstraint("plan_sha256 IS NULL OR length(plan_sha256) = 64", name="plan_hash"),
+        CheckConstraint("(plan_json IS NULL) = (plan_sha256 IS NULL)", name="plan_pair"),
         CheckConstraint("result_sha256 IS NULL OR length(result_sha256) = 64", name="result_hash"),
         CheckConstraint("result_size_bytes IS NULL OR result_size_bytes >= 0", name="result_size"),
         CheckConstraint(
@@ -59,16 +60,24 @@ class AnalysisRun(Base):
         index=True,
         comment="Current analysis execution lifecycle state.",
     )
+    processing_stage: Mapped[str] = mapped_column(
+        Text,
+        server_default=text("'QUEUED'"),
+        comment="Current worker stage for progress reporting and crash recovery.",
+    )
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, server_default=text("0"), comment="Number of times a worker claimed this run."
+    )
     stable_model_id: Mapped[str | None] = mapped_column(
         Text, comment="Stable identifier for the model configuration that produced the plan."
     )
     prompt_version: Mapped[str | None] = mapped_column(
         Text, comment="Version of the prompt used to produce the plan."
     )
-    plan_json: Mapped[dict[str, Any]] = mapped_column(
+    plan_json: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, comment="Normalized, validated model-generated query plan."
     )
-    plan_sha256: Mapped[str] = mapped_column(
+    plan_sha256: Mapped[str | None] = mapped_column(
         Text, comment="SHA-256 of the canonical normalized query plan."
     )
     result_json: Mapped[dict[str, Any] | None] = mapped_column(

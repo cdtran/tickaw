@@ -75,20 +75,6 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
       });
       setDetail(previous => previous ? { ...previous, cells: [...previous.cells, cell] } : previous);
       setQuestion("");
-      try {
-        const analysis = await request<AnalysisRunSummary>(
-          `notebooks/${detail.id}/cells/${cell.id}/analysis-runs`,
-          {},
-        );
-        setDetail(previous => previous ? {
-          ...previous,
-          cells: previous.cells.map(item => item.id === cell.id
-            ? { ...item, latest_analysis: analysis }
-            : item),
-        } : previous);
-      } catch (reason) {
-        setError(`Question saved, but analysis could not be started: ${reason instanceof Error ? reason.message : "Please try again."}`);
-      }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save question."); }
     finally { setBusy(false); }
   }

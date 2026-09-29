@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import AnalysisRun, DatasetVersion, Notebook, NotebookCell
 from app.schemas.analysis import AnalysisRunSummary
 from app.schemas.notebook import CellResponse, NotebookDetail, QuestionCreate
+from app.services.analysis_service import queued_run_for_cell
 from app.services.llm_service import get_model_registry
 from packages.llm_gateway.registry import UnknownModelError
 
@@ -18,6 +19,13 @@ def get_notebook(session: Session, notebook_id: UUID) -> Notebook:
     if notebook is None:
         raise HTTPException(404, "Notebook not found.")
     return notebook
+
+
+def get_cell(session: Session, notebook_id: UUID, cell_id: UUID) -> NotebookCell:
+    cell = session.get(NotebookCell, cell_id)
+    if cell is None or cell.notebook_id != notebook_id:
+        raise HTTPException(404, "Notebook cell not found.")
+    return cell
 
 
 def detail(session: Session, notebook_id: UUID) -> NotebookDetail:
@@ -54,7 +62,7 @@ def detail(session: Session, notebook_id: UUID) -> NotebookDetail:
     )
 
 
-def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -> NotebookCell:
+def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -> CellResponse:
     notebook = get_notebook(session, notebook_id)
     version = session.get(DatasetVersion, request.dataset_version_id)
     if version is None:
@@ -72,7 +80,13 @@ def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -
         stable_model_id=request.stable_model_id,
     )
     session.add(cell)
+    session.flush()
+    run = queued_run_for_cell(cell)
+    session.add(run)
     notebook.updated_at = func.now()
     session.commit()
     session.refresh(cell)
-    return cell
+    session.refresh(run)
+    return CellResponse.model_validate(cell).model_copy(
+        update={"latest_analysis": AnalysisRunSummary.model_validate(run)}
+    )

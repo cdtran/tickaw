@@ -1,37 +1,40 @@
-"""Submit a persisted question and server-owned dataset metadata to the LLM gateway."""
+"""Generate a validated query plan for a durable analysis run."""
 
-from uuid import UUID
-
-from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.models import AnalysisRun, DatasetVersion, NotebookCell
-from app.services.analysis_service import create_run
 from packages.data_engine.execution import catalog_from_profile
 from packages.data_engine.query_plan import PlanError, QueryPlan, validate_plan
 from packages.llm_gateway.adapters.openai_compatible import ModelProviderError
-from packages.llm_gateway.contracts import PlanRequest
+from packages.llm_gateway.contracts import PlanRequest, PlanResponse
 from packages.llm_gateway.gateway import LLMGateway
 from packages.llm_gateway.prompts import PROMPT_VERSION
 
 
-def generate_draft(
+class PlanGenerationError(Exception):
+    def __init__(self, code: str, message: str):
+        self.code = code
+        super().__init__(message)
+
+
+def generate_plan(
     session: Session,
-    notebook_id: UUID,
-    cell_id: UUID,
+    run: AnalysisRun,
     gateway: LLMGateway,
-) -> AnalysisRun:
-    cell = session.get(NotebookCell, cell_id)
-    if cell is None or cell.notebook_id != notebook_id:
-        raise HTTPException(404, "Notebook cell not found.")
-    version = session.get(DatasetVersion, cell.dataset_version_id)
-    if version is None or version.status != "READY":
-        raise HTTPException(409, "The question's dataset version is not ready for analysis.")
+) -> tuple[QueryPlan, PlanResponse]:
+    cell = session.get(NotebookCell, run.notebook_cell_id)
+    version = session.get(DatasetVersion, run.dataset_version_id)
+    if cell is None or version is None or version.status != "READY":
+        raise PlanGenerationError(
+            "SOURCE_UNAVAILABLE", "The question's dataset version is not ready for analysis."
+        )
     try:
         catalog = catalog_from_profile(version.schema_json or {})
     except ValueError as error:
-        raise HTTPException(500, "The pinned dataset schema is invalid.") from error
+        raise PlanGenerationError(
+            "INVALID_SCHEMA", "The pinned dataset schema is invalid."
+        ) from error
     request = PlanRequest(
         question=cell.question,
         dataset_schema=version.schema_json or {},
@@ -39,21 +42,18 @@ def generate_draft(
         response_schema=QueryPlan.model_json_schema(),
         prompt_version=PROMPT_VERSION,
     )
-    response = None
-    plan = None
     for attempt in range(2):
         try:
             response = gateway.generate_plan(cell.stable_model_id, request)
-            plan = validate_plan(response.payload, catalog)
-            break
+            return validate_plan(response.payload, catalog), response
         except ModelProviderError as error:
-            raise HTTPException(
-                502, "The selected model could not generate a valid query plan."
+            raise PlanGenerationError(
+                "MODEL_UNAVAILABLE", "The selected model could not generate a query plan."
             ) from error
         except (ValidationError, PlanError) as error:
             if attempt == 1:
-                raise HTTPException(
-                    502, "The selected model could not generate a valid query plan."
+                raise PlanGenerationError(
+                    "INVALID_PLAN", "The selected model could not generate a valid query plan."
                 ) from error
             request = request.model_copy(
                 update={
@@ -63,14 +63,4 @@ def generate_draft(
                     )
                 }
             )
-    if response is None or plan is None:  # Defensive; the loop returns or assigns both.
-        raise HTTPException(
-            502, "The selected model could not generate a valid query plan."
-        )
-    return create_run(
-        session,
-        cell.id,
-        plan,
-        stable_model_id=response.stable_model_id,
-        prompt_version=response.prompt_version,
-    )
+    raise PlanGenerationError("INVALID_PLAN", "No query plan was generated.")
