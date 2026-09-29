@@ -8,7 +8,6 @@ type Notebook = { id: string; title: string };
 type Cell = { id: string; question: string; dataset_version_id: string; stable_model_id: string; status: string; created_at: string; result?: ExecutionResult | null; latest_analysis?: AnalysisRunSummary | null };
 type Detail = Notebook & { cells: Cell[] };
 type Dataset = { id: string; name: string; versions: { id: string; version_number: number; status: string }[] };
-type PlanDraft = { plan: object; stable_model_id: string; provider: string; provider_model: string; prompt_version: string };
 
 async function request<T>(url: string, body?: object): Promise<T> {
   const response = await fetch(`/api/v1/${url}`, body ? {
@@ -40,7 +39,6 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
   const [question, setQuestion] = useState("");
   const [version, setVersion] = useState("");
   const [modelId, setModelId] = useState("");
-  const [drafts, setDrafts] = useState<Record<string, PlanDraft>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,10 +76,18 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
       setDetail(previous => previous ? { ...previous, cells: [...previous.cells, cell] } : previous);
       setQuestion("");
       try {
-        const draft = await request<PlanDraft>(`notebooks/${detail.id}/cells/${cell.id}/plan`, {});
-        setDrafts(previous => ({ ...previous, [cell.id]: draft }));
+        const analysis = await request<AnalysisRunSummary>(
+          `notebooks/${detail.id}/cells/${cell.id}/analysis-runs`,
+          {},
+        );
+        setDetail(previous => previous ? {
+          ...previous,
+          cells: previous.cells.map(item => item.id === cell.id
+            ? { ...item, latest_analysis: analysis }
+            : item),
+        } : previous);
       } catch (reason) {
-        setError(`Question saved, but plan generation failed: ${reason instanceof Error ? reason.message : "Please try again."}`);
+        setError(`Question saved, but analysis could not be started: ${reason instanceof Error ? reason.message : "Please try again."}`);
       }
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save question."); }
     finally { setBusy(false); }
@@ -115,10 +121,6 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
           <p className="hint">{versions.find(item => item.id === cell.dataset_version_id)?.label ?? cell.dataset_version_id}</p>
           <p className="hint">Model · {models.find(model => model.id === cell.stable_model_id)?.label ?? cell.stable_model_id}</p>
           <p className="hint">Saved · {new Date(cell.created_at).toLocaleString()}</p>
-          {drafts[cell.id] && <details><summary>Generated query plan</summary>
-            <pre>{JSON.stringify(drafts[cell.id].plan, null, 2)}</pre>
-            <p className="hint">Draft only · semantic validation and execution are not enabled yet.</p>
-          </details>}
           {cell.result && <ResultCell result={cell.result} />}
           {!cell.result && cell.latest_analysis && <PersistedResult analysis={cell.latest_analysis} />}
         </article>)}

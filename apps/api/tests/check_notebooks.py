@@ -46,7 +46,14 @@ def main():
         version = DatasetVersion(dataset_id=dataset.id, version_number=1, status="READY",
             original_filename="sales.csv", file_format="csv", storage_bucket="test",
             original_object_key=str(uuid4()), normalized_object_key=str(uuid4()),
-            schema_json={}, profile_json={}, preview_json=[], row_count=0,
+            schema_json={
+                "version": 1,
+                "columns": [
+                    {"name": "region", "inferred_type": "string", "pandas_dtype": "string"},
+                    {"name": "revenue", "inferred_type": "number", "pandas_dtype": "Float64"},
+                ],
+            },
+            profile_json={}, preview_json=[], row_count=0,
             completed_at=datetime.now(UTC))
         pending = DatasetVersion(dataset_id=dataset.id, version_number=2,
             original_filename="sales.csv", file_format="csv", storage_bucket="test",
@@ -73,21 +80,50 @@ def main():
     fake_gateway = FakeGateway()
     app.dependency_overrides[get_llm_gateway] = lambda: fake_gateway
     try:
-        draft = client.post(path + f"/cells/{cell['id']}/plan")
+        draft = client.post(path + f"/cells/{cell['id']}/analysis-runs")
     finally:
         app.dependency_overrides.pop(get_llm_gateway, None)
-    assert draft.status_code == 200, draft.text
-    assert draft.json()['plan']['plan_version'] == 2
-    assert draft.json()['provider_model'] == 'qwen-test'
+    assert draft.status_code == 202, draft.text
+    assert draft.json()['status'] == 'QUEUED'
+    assert draft.json()['stable_model_id'] == 'qwen-local'
+    assert draft.json()['prompt_version'] == 'query-plan-v2.3'
     assert fake_gateway.calls[0][0] == 'qwen-local'
     submitted = fake_gateway.calls[0][1]
     assert submitted.question == 'Revenue by region?'
-    assert submitted.dataset_schema == {}
+    assert [column['name'] for column in submitted.dataset_schema['columns']] == [
+        'region', 'revenue'
+    ]
     assert submitted.dataset_profile == {}
     assert submitted.response_schema['properties']['plan_version']['const'] == 2
+    fake_gateway.calls.clear()
+    original_generate = fake_gateway.generate_plan
+
+    def invalid_column(stable_model_id, request):
+        result = original_generate(stable_model_id, request)
+        return result.model_copy(update={
+            "payload": {
+                **result.payload,
+                "dimensions": ["invented_column"],
+                "presentation": {"type": "bar"},
+            }
+        })
+
+    fake_gateway.generate_plan = invalid_column
+    app.dependency_overrides[get_llm_gateway] = lambda: fake_gateway
+    try:
+        invalid = client.post(path + f"/cells/{cell['id']}/analysis-runs")
+    finally:
+        app.dependency_overrides.pop(get_llm_gateway, None)
+    assert invalid.status_code == 502, invalid.text
+    assert invalid.json()['detail'] == 'The selected model could not generate a valid query plan.'
+    assert len(fake_gateway.calls) == 2
+    retry_feedback = fake_gateway.calls[1][1].validation_feedback or ''
+    assert 'previous query plan was rejected' in retry_feedback
+    assert 'invented_column' in retry_feedback
     # A new client/request/session models a reload, without in-memory UI state.
     loaded = TestClient(app).get(path).json()
-    assert loaded['cells'] == [cell]
+    assert loaded['cells'][0]['id'] == cell['id']
+    assert loaded['cells'][0]['latest_analysis']['id'] == draft.json()['id']
     assert loaded['updated_at'] >= notebook['updated_at']
     assert client.get(f"/api/v1/notebooks/{other['id']}").json()['cells'] == []
     assert notebook['id'] in [item['id'] for item in client.get('/api/v1/notebooks').json()]

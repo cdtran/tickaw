@@ -6,7 +6,7 @@ from uuid import uuid4
 from app.db.session import get_session_factory
 from app.main import app
 from app.models import AnalysisRun, Dataset, DatasetVersion, Notebook, NotebookCell
-from app.services.analysis_service import complete_run, create_run, load_result
+from app.services.analysis_service import complete_run, create_run, load_result, start_run
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import update
@@ -71,6 +71,7 @@ def main():
             notebook_id=notebook.id,
             dataset_version_id=version.id,
             question="Revenue by region?",
+            stable_model_id="qwen-local",
         )
         session.add(cell)
         session.commit()
@@ -82,6 +83,9 @@ def main():
             stable_model_id="analysis-default",
             prompt_version="prompt-v1",
         )
+        assert run.status == "QUEUED" and run.started_at is None
+        run = start_run(session, run.id)
+        assert run.status == "PROCESSING" and run.started_at is not None
         execution = ExecutionSuccess(
             table=TableResult(
                 columns=[
@@ -140,6 +144,7 @@ def main():
             }
         )
         large_run = create_run(session, cell.id, large_plan)
+        large_run = start_run(session, large_run.id)
         large_execution = ExecutionSuccess(
             table=TableResult(
                 columns=[

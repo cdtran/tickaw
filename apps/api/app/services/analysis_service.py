@@ -60,14 +60,27 @@ def create_run(
     run = AnalysisRun(
         notebook_cell_id=cell.id,
         dataset_version_id=cell.dataset_version_id,
-        status="PROCESSING",
+        status="QUEUED",
         stable_model_id=stable_model_id,
         prompt_version=prompt_version,
         plan_json=normalized,
         plan_sha256=sha256_json(normalized),
-        started_at=datetime.now(UTC),
     )
     session.add(run)
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def start_run(session: Session, run_id: UUID) -> AnalysisRun:
+    """Transition one claimed queued run to processing."""
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None:
+        raise HTTPException(404, "Analysis run not found.")
+    if run.status != "QUEUED":
+        raise HTTPException(409, "Only a queued analysis run can be started.")
+    run.status = "PROCESSING"
+    run.started_at = datetime.now(UTC)
     session.commit()
     session.refresh(run)
     return run

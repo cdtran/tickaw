@@ -291,49 +291,76 @@ export default function ResultCell({
 }
 
 export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) {
+  const [run, setRun] = useState(analysis);
   const [artifact, setArtifact] = useState<StoredAnalysisResult | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (analysis.status !== "SUCCEEDED") return;
     let active = true;
-    fetch(`/api/v1/analysis-runs/${encodeURIComponent(analysis.id)}/result`)
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.detail ?? "Could not load the saved result.");
-        return body as StoredAnalysisResult;
-      })
-      .then((body) => { if (active) setArtifact(body); })
-      .catch((reason) => { if (active) setError(reason.message); });
-    return () => { active = false; };
-  }, [analysis.id, analysis.status]);
+    setRun(analysis);
+    setArtifact(null);
+    setError("");
 
-  if (analysis.status === "FAILED") {
+    async function load() {
+      if (!active) return;
+      try {
+        const statusResponse = await fetch(
+          `/api/v1/analysis-runs/${encodeURIComponent(analysis.id)}`,
+        );
+        const statusBody = await statusResponse.json();
+        if (!statusResponse.ok) {
+          throw new Error(statusBody.detail ?? "Could not load analysis status.");
+        }
+        if (!active) return;
+        const current = statusBody as AnalysisRunSummary;
+        setRun(current);
+        if (current.status === "SUCCEEDED") {
+          const resultResponse = await fetch(
+            `/api/v1/analysis-runs/${encodeURIComponent(analysis.id)}/result`,
+          );
+          const resultBody = await resultResponse.json();
+          if (!resultResponse.ok) {
+            throw new Error(resultBody.detail ?? "Could not load the saved result.");
+          }
+          if (active) setArtifact(resultBody as StoredAnalysisResult);
+          return;
+        }
+        if (current.status !== "FAILED" && active) window.setTimeout(load, 1000);
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : "Could not load analysis.");
+      }
+    }
+
+    void load();
+    return () => { active = false; };
+  }, [analysis.id]);
+
+  if (run.status === "FAILED") {
     return <ResultCell result={{
       result_version: 1,
       status: "failed",
       error: {
-        code: analysis.error_code ?? "ANALYSIS_FAILED",
-        message: analysis.error_message ?? "The analysis could not be completed.",
+        code: run.error_code ?? "ANALYSIS_FAILED",
+        message: run.error_message ?? "The analysis could not be completed.",
       },
       metadata: {
-        execution_id: analysis.id,
+        execution_id: run.id,
         dataset_version_id: "",
         dataset_sha256: null,
-        plan_sha256: analysis.plan_sha256,
+        plan_sha256: run.plan_sha256,
         plan_version: null,
         compiler_version: "",
         executor_version: "",
         sqlglot_version: "",
         engine: "duckdb",
         engine_version: "",
-        started_at: analysis.created_at,
+        started_at: run.created_at,
         duration_ms: 0,
         executed_sql: null,
       },
     }} />;
   }
   if (error) return <p role="alert" className="error">{error}</p>;
-  if (!artifact) return <p role="status" className="hint">Analysis {analysis.status.toLowerCase()}…</p>;
+  if (!artifact) return <p role="status" className="hint">Analysis {run.status.toLowerCase()}…</p>;
   return <ResultCell result={artifact.execution} chartSpec={artifact.chart} />;
 }

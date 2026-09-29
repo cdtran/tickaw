@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     llm_enabled_models: str = "qwen-local"
     qwen_base_url: str = "http://host.docker.internal:11434/v1"
     qwen_model: str = "qwen3:8b"
+    qwen_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
 
 
 @lru_cache

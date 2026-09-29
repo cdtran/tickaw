@@ -37,6 +37,28 @@ services:
       minio:
         condition: service_healthy
     restart: unless-stopped
+  analysis-worker:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file: .env
+    command: ["python", "-m", "app.workers.analysis"]
+    user: "1000:1000"
+    read_only: true
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 64
+    tmpfs:
+      - /tmp:size=134217728,mode=1777
+    volumes:
+      - ./apps/api:/app:ro
+      - ./packages:/opt/packages:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
   web:
     build:
       context: .

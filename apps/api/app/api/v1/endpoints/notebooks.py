@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import Notebook
-from app.schemas.model import PlanDraftResponse
+from app.schemas.analysis import AnalysisRunResponse
 from app.schemas.notebook import (
     CellResponse,
     NotebookCreate,
@@ -48,7 +48,11 @@ def add_question(notebook_id: UUID, request: QuestionCreate, session: Session = 
     return notebook_service.add_question(session, notebook_id, request)
 
 
-@router.post("/{notebook_id}/cells/{cell_id}/plan", response_model=PlanDraftResponse)
+@router.post(
+    "/{notebook_id}/cells/{cell_id}/analysis-runs",
+    response_model=AnalysisRunResponse,
+    status_code=202,
+)
 def draft_plan(
     notebook_id: UUID,
     cell_id: UUID,

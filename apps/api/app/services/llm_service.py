@@ -33,5 +33,9 @@ def get_model_registry() -> ModelRegistry:
 def get_llm_gateway() -> LLMGateway:
     return LLMGateway(
         get_model_registry(),
-        {"openai-compatible": OpenAICompatibleAdapter()},
+        {
+            "openai-compatible": OpenAICompatibleAdapter(
+                timeout_seconds=get_settings().qwen_timeout_seconds
+            )
+        },
     )

@@ -42,6 +42,7 @@ class PlanRequest(StrictContract):
     dataset_profile: dict[str, Any]
     response_schema: dict[str, Any]
     prompt_version: str
+    validation_feedback: str | None = None
 
 
 class ModelUsage(StrictContract):
