@@ -53,6 +53,18 @@ def test_time_result_becomes_line_chart_without_inventing_gap_fill():
     assert spec.missing_periods == "none"
 
 
+def test_legacy_iso_date_text_result_can_become_line_chart():
+    spec = chart_spec_for(
+        table(
+            [column("date", "text"), column("revenue", "number")],
+            [["2026-01-01", 10], ["2026-01-02", 20]],
+        ),
+        "line",
+    )
+    assert spec is not None
+    assert spec.type == "line"
+
+
 def test_unsafe_or_unhelpful_shapes_are_table_only():
     assert chart_spec_for(table([column("total", "number")], [[10]]), "bar") is None
     assert chart_spec_for(

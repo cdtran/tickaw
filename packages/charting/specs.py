@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from packages.data_engine.result_types import TableResult
+from packages.data_engine.temporal import parse_temporal
 
 CHART_ROW_LIMIT = 60
 
@@ -53,12 +54,18 @@ def chart_spec_for(table: TableResult, chart_type: Literal["table", "bar", "line
         "timestamp_tz",
     }:
         return None
-    if chart_type == "line" and dimension.logical_type not in {
-        "date",
-        "timestamp",
-        "timestamp_tz",
-    }:
-        return None
+    if chart_type == "line" and dimension.logical_type not in {"date", "timestamp", "timestamp_tz"}:
+        if dimension.logical_type != "text":
+            return None
+        values = [row[0] for row in table.rows if row[0] is not None]
+        if not values or any(not isinstance(value, str) for value in values):
+            return None
+        try:
+            kinds = {parse_temporal(value)[0] for value in values}
+        except (ValueError, OverflowError):
+            return None
+        if len(kinds) != 1 or len(kinds) == 0:
+            return None
     return ChartSpec(
         type=chart_type,
         x=dimension.name,

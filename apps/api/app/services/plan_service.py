@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models import AnalysisRun, DatasetVersion, NotebookCell
 from packages.data_engine.execution import catalog_from_profile
 from packages.data_engine.query_plan import PlanError, QueryPlan, validate_plan
+from packages.data_engine.temporal import parse_temporal
 from packages.llm_gateway.adapters.openai_compatible import ModelProviderError
 from packages.llm_gateway.contracts import PlanRequest, PlanResponse
 from packages.llm_gateway.gateway import LLMGateway
@@ -18,7 +19,26 @@ class PlanGenerationError(Exception):
         super().__init__(message)
 
 
-def normalize_presentation(payload: dict, catalog: dict[str, str]) -> dict:
+def temporal_text_columns(profile: dict, catalog: dict[str, str]) -> set[str]:
+    """Recognize legacy profiled text columns whose samples are unambiguous ISO temporal values."""
+    eligible = set()
+    for column in profile.get("columns", []):
+        name = column.get("name")
+        values = column.get("sample_values", [])
+        if catalog.get(name) != "text" or not values:
+            continue
+        try:
+            kinds = {parse_temporal(value)[0] for value in values}
+        except (TypeError, ValueError, OverflowError):
+            continue
+        if len(kinds) == 1:
+            eligible.add(name)
+    return eligible
+
+
+def normalize_presentation(
+    payload: dict, catalog: dict[str, str], line_eligible_text_columns: set[str]
+) -> dict:
     """Correct only a chart-kind mismatch; never change query semantics."""
     dimensions = payload.get("dimensions")
     presentation = payload.get("presentation")
@@ -28,6 +48,7 @@ def normalize_presentation(payload: dict, catalog: dict[str, str]) -> dict:
         and isinstance(presentation, dict)
         and presentation.get("type") == "line"
         and catalog.get(dimensions[0]) not in {"date", "timestamp", "timestamp_tz"}
+        and dimensions[0] not in line_eligible_text_columns
     ):
         return {**payload, "presentation": {**presentation, "type": "bar"}}
     return payload
@@ -50,6 +71,7 @@ def generate_plan(
         raise PlanGenerationError(
             "INVALID_SCHEMA", "The pinned dataset schema is invalid."
         ) from error
+    line_eligible = temporal_text_columns(version.profile_json or {}, catalog)
     request = PlanRequest(
         question=cell.question,
         dataset_schema=version.schema_json or {},
@@ -60,7 +82,7 @@ def generate_plan(
     for attempt in range(2):
         try:
             response = gateway.generate_plan(cell.stable_model_id, request)
-            normalized = normalize_presentation(response.payload, catalog)
+            normalized = normalize_presentation(response.payload, catalog, line_eligible)
             return validate_plan(normalized, catalog), response
         except ModelProviderError as error:
             raise PlanGenerationError(

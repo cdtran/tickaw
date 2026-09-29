@@ -107,7 +107,6 @@ def test_every_field_is_required(field):
         {"order_by": [{"field": "revenue", "direction": "desc"}]},
         {"order_by": [{"field": "region", "direction": "asc"}] * 2},
         {"dimensions": [], "presentation": {"type": "bar"}},
-        {"dimensions": ["region"], "presentation": {"type": "line"}},
         {
             "metrics": [{"op": "min", "column": "region", "alias": "first_region"}],
             "presentation": {"type": "bar"},
@@ -124,6 +123,12 @@ def test_catalog_and_alias_case_collisions():
         validate_plan(basic(), COLUMNS | {"Region": "text"})
     with pytest.raises(PlanError, match="collide"):
         validate_plan(basic(), COLUMNS | {"TOTAL_REVENUE": "number"})
+
+
+def test_text_dimension_can_reach_runtime_line_chart_validation():
+    plan = basic() | {"dimensions": ["date_text"], "presentation": {"type": "line"}}
+    validated = validate_plan(plan, COLUMNS | {"date_text": "text"})
+    assert validated.presentation.type == "line"
 
 
 def test_unsupported_dialect():

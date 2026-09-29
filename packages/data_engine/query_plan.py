@@ -163,6 +163,6 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
                 raise PlanError("Charts require numeric metric outputs")
         if plan.presentation.type == "line":
             dimension_type = column_type(plan.dimensions[0])
-            if dimension_type not in {"date", "timestamp", "timestamp_tz"}:
-                raise PlanError("Line charts require a date or timestamp grouping column")
+            if dimension_type not in {"text", "date", "timestamp", "timestamp_tz"}:
+                raise PlanError("Line charts require a temporal or text grouping column")
     return plan
