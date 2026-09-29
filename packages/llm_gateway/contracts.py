@@ -20,7 +20,7 @@ class ModelInfo(StrictContract):
 class ModelRoute(StrictContract):
     stable_id: str
     label: str
-    provider: Literal["openai-compatible"]
+    provider: Literal["openai-compatible", "ollama"]
     provider_model: str
     base_url: str
     description: str

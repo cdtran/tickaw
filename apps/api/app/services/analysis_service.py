@@ -57,16 +57,17 @@ def create_run(
     if version.status != "READY":
         raise HTTPException(409, "The pinned dataset version is not analysis-ready.")
     normalized = plan.model_dump(mode="json") if plan is not None else None
-    run = AnalysisRun(
-        notebook_cell_id=cell.id,
-        dataset_version_id=cell.dataset_version_id,
-        status="QUEUED",
-        processing_stage="QUEUED",
-        stable_model_id=stable_model_id or cell.stable_model_id,
-        prompt_version=prompt_version,
-        plan_json=normalized,
-        plan_sha256=sha256_json(normalized) if normalized is not None else None,
-    )
+    values = {
+        "notebook_cell_id": cell.id,
+        "dataset_version_id": cell.dataset_version_id,
+        "status": "QUEUED",
+        "processing_stage": "QUEUED",
+        "stable_model_id": stable_model_id or cell.stable_model_id,
+        "prompt_version": prompt_version,
+    }
+    if normalized is not None:
+        values.update(plan_json=normalized, plan_sha256=sha256_json(normalized))
+    run = AnalysisRun(**values)
     session.add(run)
     session.commit()
     session.refresh(run)

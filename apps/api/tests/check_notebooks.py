@@ -93,12 +93,16 @@ def main():
     assert cell['latest_analysis']['plan_sha256'] is None
     assert notification is not None
     assert notification.payload == cell['latest_analysis']['id']
+    retry = client.post(path + f"/cells/{cell['id']}/analysis-runs", json={})
+    assert retry.status_code == 202, retry.text
+    assert retry.json()['status'] == 'QUEUED'
+    assert retry.json()['plan_sha256'] is None
     fake_gateway = FakeGateway()
     with get_session_factory()() as session:
         run = session.get(AnalysisRun, cell['latest_analysis']['id'])
         plan, plan_response = generate_plan(session, run, fake_gateway)
     assert plan.metrics[0].alias == 'row_count'
-    assert plan_response.prompt_version == 'query-plan-v2.3'
+    assert plan_response.prompt_version == 'query-plan-v2.8'
     assert fake_gateway.calls[0][0] == 'qwen-local'
     submitted = fake_gateway.calls[0][1]
     assert submitted.question == 'Revenue by region?'
@@ -135,7 +139,7 @@ def main():
     # A new client/request/session models a reload, without in-memory UI state.
     loaded = TestClient(app).get(path).json()
     assert loaded['cells'][0]['id'] == cell['id']
-    assert loaded['cells'][0]['latest_analysis']['id'] == cell['latest_analysis']['id']
+    assert loaded['cells'][0]['latest_analysis']['id'] == retry.json()['id']
     assert loaded['updated_at'] >= notebook['updated_at']
     assert client.get(f"/api/v1/notebooks/{other['id']}").json()['cells'] == []
     assert notebook['id'] in [item['id'] for item in client.get('/api/v1/notebooks').json()]

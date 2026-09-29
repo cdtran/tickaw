@@ -18,6 +18,21 @@ class PlanGenerationError(Exception):
         super().__init__(message)
 
 
+def normalize_presentation(payload: dict, catalog: dict[str, str]) -> dict:
+    """Correct only a chart-kind mismatch; never change query semantics."""
+    dimensions = payload.get("dimensions")
+    presentation = payload.get("presentation")
+    if (
+        isinstance(dimensions, list)
+        and len(dimensions) == 1
+        and isinstance(presentation, dict)
+        and presentation.get("type") == "line"
+        and catalog.get(dimensions[0]) not in {"date", "timestamp", "timestamp_tz"}
+    ):
+        return {**payload, "presentation": {**presentation, "type": "bar"}}
+    return payload
+
+
 def generate_plan(
     session: Session,
     run: AnalysisRun,
@@ -45,7 +60,8 @@ def generate_plan(
     for attempt in range(2):
         try:
             response = gateway.generate_plan(cell.stable_model_id, request)
-            return validate_plan(response.payload, catalog), response
+            normalized = normalize_presentation(response.payload, catalog)
+            return validate_plan(normalized, catalog), response
         except ModelProviderError as error:
             raise PlanGenerationError(
                 "MODEL_UNAVAILABLE", "The selected model could not generate a query plan."
