@@ -1,0 +1,186 @@
+{
+  "suite_version": 1,
+  "dataset": "profile_demo.json",
+  "cases": [
+    {
+      "id": "average-books-sold-per-day",
+      "question": "What’s the average number of books sold per day?",
+      "expected_outcome": "unanswerable_with_available_data",
+      "rationale": "No quantity or units-sold field exists. Revenue and row count are not substitutes for books sold.",
+      "forbidden_metrics": [
+        {"op": "count_rows"},
+        {"op": "avg", "column": "revenue"}
+      ]
+    },
+    {
+      "id": "book-transaction-rows-per-day",
+      "question": "Count the book transaction rows per day.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["date"],
+      "required_metrics": [{"op": "count_rows"}],
+      "required_filters": [{"column": "category", "op": "eq", "value": "Books"}]
+    },
+    {
+      "id": "average-book-revenue-per-day",
+      "question": "What is the average book revenue per day?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["date"],
+      "required_metrics": [{"op": "avg", "column": "revenue"}],
+      "required_filters": [{"column": "category", "op": "eq", "value": "Books"}]
+    },
+    {
+      "id": "revenue-by-category-and-date",
+      "question": "Show revenue by category and date.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["category", "date"],
+      "required_metrics": [{"op": "sum", "column": "revenue"}]
+    },
+    {
+      "id": "quantity-language-without-quantity",
+      "question": "How many units were sold in each category?",
+      "expected_outcome": "needs_clarification",
+      "rationale": "The dataset does not define units or quantity; counting rows silently changes the question.",
+      "forbidden_metrics": [{"op": "count_rows"}]
+    },
+    {
+      "id": "missing-profit-field",
+      "question": "What was the total profit by category?",
+      "expected_outcome": "unanswerable_with_available_data",
+      "rationale": "Profit cannot be calculated without profit or cost data.",
+      "forbidden_metrics": [{"op": "sum", "column": "revenue"}]
+    },
+    {
+      "id": "total-revenue",
+      "question": "What is the total revenue?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [{"op": "sum", "column": "revenue"}],
+      "required_presentation": "table"
+    },
+    {
+      "id": "average-revenue-by-category",
+      "question": "What is the average recorded revenue for each category?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["category"],
+      "required_metrics": [{"op": "avg", "column": "revenue"}]
+    },
+    {
+      "id": "record-count-by-date",
+      "question": "How many records are there per date?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["date"],
+      "required_metrics": [{"op": "count_rows"}]
+    },
+    {
+      "id": "non-null-revenue-by-category",
+      "question": "Count the non-null revenue values by category.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["category"],
+      "required_metrics": [{"op": "count_non_null", "column": "revenue"}]
+    },
+    {
+      "id": "missing-revenue-rows",
+      "question": "Count rows with missing revenue by category.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["category"],
+      "required_metrics": [{"op": "count_rows"}],
+      "required_filters": [{"column": "revenue", "op": "is_null"}]
+    },
+    {
+      "id": "active-records-by-category",
+      "question": "How many active records are in each category?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["category"],
+      "required_metrics": [{"op": "count_rows"}],
+      "required_filters": [{"column": "active", "op": "eq", "value": true}]
+    },
+    {
+      "id": "books-total-revenue",
+      "question": "What is the total revenue for Books?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [{"op": "sum", "column": "revenue"}],
+      "required_filters": [{"column": "category", "op": "eq", "value": "Books"}]
+    },
+    {
+      "id": "games-average-revenue",
+      "question": "What is the average revenue for Games?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [{"op": "avg", "column": "revenue"}],
+      "required_filters": [{"column": "category", "op": "eq", "value": "Games"}]
+    },
+    {
+      "id": "highest-revenue-category",
+      "question": "Which category has the highest total revenue?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": ["category"],
+      "required_metrics": [{"op": "sum", "column": "revenue"}],
+      "required_order_by": [{"direction": "desc"}],
+      "required_limit": 1
+    },
+    {
+      "id": "earliest-recorded-date",
+      "question": "What is the earliest recorded date?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [{"op": "min", "column": "date"}],
+      "required_presentation": "table"
+    },
+    {
+      "id": "best-selling-category-without-quantity",
+      "question": "Which category sold the most products?",
+      "expected_outcome": "needs_clarification",
+      "rationale": "Neither row count nor revenue establishes how many products were sold.",
+      "forbidden_metrics": [
+        {"op": "count_rows"},
+        {"op": "sum", "column": "revenue"}
+      ]
+    },
+    {
+      "id": "unique-customers-without-customer",
+      "question": "How many unique customers purchased books?",
+      "expected_outcome": "unanswerable_with_available_data",
+      "rationale": "There is no customer identifier and query-plan v2 has no distinct-count operation.",
+      "forbidden_metrics": [{"op": "count_rows"}]
+    },
+    {
+      "id": "average-price-without-price",
+      "question": "What was the average price by category?",
+      "expected_outcome": "needs_clarification",
+      "rationale": "Revenue is not necessarily unit price and no price field exists.",
+      "forbidden_metrics": [{"op": "avg", "column": "revenue"}]
+    },
+    {
+      "id": "profit-margin-without-cost",
+      "question": "What is the profit margin for Books?",
+      "expected_outcome": "unanswerable_with_available_data",
+      "rationale": "Profit margin requires cost or profit data, neither of which is available.",
+      "forbidden_metrics": [
+        {"op": "sum", "column": "revenue"},
+        {"op": "avg", "column": "revenue"}
+      ]
+    }
+  ],
+  "classification_fixtures": [
+    {
+      "id": "malformed-model-output",
+      "payload": {"plan_version": 2, "dimensions": ["date"]},
+      "expected_outcome": "invalid_model_output"
+    },
+    {
+      "id": "misleading-row-count-substitution",
+      "case_id": "average-books-sold-per-day",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": ["date"],
+        "metrics": [{"op": "count_rows", "alias": "books_sold"}],
+        "filters": [{"column": "category", "op": "eq", "value": "Books"}],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {"type": "line"}
+      },
+      "expected_outcome": "semantically_misleading_substitution"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "dataset_id": "profile-demo",
+  "description": "Small bookstore-shaped dataset with no quantity, units-sold, or transaction-count field.",
+  "schema": {
+    "version": 1,
+    "columns": [
+      {"name": "category", "inferred_type": "string"},
+      {"name": "revenue", "inferred_type": "number"},
+      {"name": "active", "inferred_type": "boolean"},
+      {"name": "code", "inferred_type": "string"},
+      {"name": "missing", "inferred_type": "string"},
+      {"name": "date", "inferred_type": "date"}
+    ]
+  },
+  "profile": {
+    "row_count": 3,
+    "columns": [
+      {"name": "category", "sample_values": ["Books", "Games"]},
+      {"name": "revenue", "sample_values": [120, 180]},
+      {"name": "active", "sample_values": [true, false]},
+      {"name": "code", "sample_values": ["001", "002", "003"]},
+      {"name": "missing", "sample_values": []},
+      {"name": "date", "sample_values": ["2026-01-01", "2026-01-02", "2026-01-03"]}
+    ]
+  }
+}

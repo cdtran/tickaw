@@ -8,6 +8,7 @@ services:
     volumes:
       - ./apps/api:/app
       - ./packages:/opt/packages:ro
+      - ./evals:/opt/evals:ro
     depends_on:
       postgres:
         condition: service_healthy

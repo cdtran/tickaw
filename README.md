@@ -172,6 +172,16 @@ PYTHONPATH=. uv run --extra dev pytest tests/unit
 npm --prefix apps/web run build
 ```
 
+Run the live, provider-neutral model-quality corpus separately (it requires the configured
+model server and intentionally fails when a known semantic gap is observed):
+
+```sh
+docker compose run --rm api python -m evals.model_quality.run --model qwen-local
+```
+
+See [model-quality evaluations](evals/model_quality/README.md) for the case contract and
+scoring rules.
+
 Run the disposable database, migration, API, profiling, and analysis integration harness:
 
 ```sh
