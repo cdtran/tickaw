@@ -25,6 +25,8 @@ class AnalysisRunSummary(BaseModel):
     status: str
     processing_stage: str
     attempt_count: int
+    heartbeat_at: datetime | None
+    next_attempt_at: datetime | None
     plan_sha256: str | None
     result_sha256: str | None
     error_code: str | None
@@ -32,6 +34,7 @@ class AnalysisRunSummary(BaseModel):
     validation_diagnostics: list[dict] | None
     clarification_question: str | None
     created_at: datetime
+    started_at: datetime | None
     completed_at: datetime | None
 
 
@@ -42,7 +45,6 @@ class AnalysisRunResponse(AnalysisRunSummary):
     prompt_version: str | None
     result_size_bytes: int | None
     result_version: int | None
-    started_at: datetime | None
 
 
 class ClarificationAnswer(BaseModel):

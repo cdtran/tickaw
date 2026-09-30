@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import ResultCell, { PersistedResult } from "../components/notebook/ResultCell";
 import ModelSelector, { SelectableModel } from "../components/shared/ModelSelector";
@@ -9,9 +9,9 @@ type Cell = { id: string; question: string; dataset_version_id: string; stable_m
 type Detail = Notebook & { cells: Cell[] };
 type Dataset = { id: string; name: string; versions: { id: string; version_number: number; status: string }[] };
 
-async function request<T>(url: string, body?: object): Promise<T> {
+async function request<T>(url: string, body?: object, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(`/api/v1/${url}`, body ? {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body),
   } : undefined);
   const text = await response.text();
   let data: any = null;
@@ -42,6 +42,7 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const submissionKey = useRef<string | null>(null);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(""); setDetail(null); setQuestion(""); setVersion("");
@@ -70,10 +71,12 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
     event.preventDefault(); if (!detail) return;
     setBusy(true); setError("");
     try {
+      submissionKey.current ||= crypto.randomUUID();
       const cell = await request<Cell>(`notebooks/${detail.id}/cells`, {
         question: question.trim(), dataset_version_id: version, stable_model_id: modelId,
-      });
+      }, { "Idempotency-Key": submissionKey.current });
       setDetail(previous => previous ? { ...previous, cells: [...previous.cells, cell] } : previous);
+      submissionKey.current = null;
       setQuestion("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save question."); }
     finally { setBusy(false); }
@@ -87,16 +90,22 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
       <section className="upload-panel"><h2>New question</h2>
         <p className="hint">The question is pinned to the selected dataset version and model before a plan is requested.</p>
         <form onSubmit={save}>
-          <ModelSelector models={models} value={modelId} disabled={busy} onChange={setModelId} />
+          <ModelSelector models={models} value={modelId} disabled={busy} onChange={value => {
+            submissionKey.current = null; setModelId(value);
+          }} />
           <label htmlFor="question-version">Dataset version</label>
-          <select id="question-version" required value={version} disabled={busy} onChange={event => setVersion(event.target.value)}>
+          <select id="question-version" required value={version} disabled={busy} onChange={event => {
+            submissionKey.current = null; setVersion(event.target.value);
+          }}>
             <option value="">Choose a profiled dataset version</option>
             {versions.filter(item => item.status === "READY").map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
           {!versions.some(item => item.status === "READY") && <p>No ready datasets. <a href="#datasets">Upload and profile a CSV first.</a></p>}
           <label htmlFor="question">Question</label>
           <textarea id="question" rows={4} maxLength={4000} required value={question} disabled={busy}
-            placeholder="Which region had the most revenue?" onChange={event => setQuestion(event.target.value)} />
+            placeholder="Which region had the most revenue?" onChange={event => {
+              submissionKey.current = null; setQuestion(event.target.value);
+            }} />
           <button disabled={busy || !modelId || !version || !question.trim()}>{busy ? "Submitting…" : "Ask question"}</button>
         </form>
       </section>
@@ -108,7 +117,17 @@ export default function NotebookPage({ notebookId }: { notebookId: string }) {
           <p className="hint">Model · {models.find(model => model.id === cell.stable_model_id)?.label ?? cell.stable_model_id}</p>
           <p className="hint">Saved · {new Date(cell.created_at).toLocaleString()}</p>
           {cell.result && <ResultCell result={cell.result} />}
-          {!cell.result && cell.latest_analysis && <PersistedResult analysis={cell.latest_analysis} />}
+          {!cell.result && cell.latest_analysis && <PersistedResult
+            analysis={cell.latest_analysis}
+            notebookId={detail.id}
+            cellId={cell.id}
+            onRetried={next => setDetail(previous => previous ? {
+              ...previous,
+              cells: previous.cells.map(item => item.id === cell.id
+                ? { ...item, latest_analysis: next }
+                : item),
+            } : previous)}
+          />}
         </article>)}
       </section>
     </> : !notebookId && <>

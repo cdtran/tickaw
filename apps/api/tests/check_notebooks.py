@@ -72,9 +72,12 @@ def main():
     assert [model["id"] for model in models.json()] == ["qwen-local"]
     payload = {"question": " Revenue by region? ", "dataset_version_id": version_id,
                "stable_model_id": "qwen-local"}
+    idempotency_key = str(uuid4())
     with patch("app.services.notebook_service.enqueue_run") as enqueue:
         enqueue.return_value = False  # Broker outage must not roll back the durable run.
-        response = client.post(path + "/cells", json=payload)
+        response = client.post(
+            path + "/cells", json=payload, headers={"Idempotency-Key": idempotency_key}
+        )
     assert response.status_code == 201, response.text
     cell = response.json()
     assert cell['question'] == "Revenue by region?" and cell['status'] == "SAVED"
@@ -86,6 +89,18 @@ def main():
     assert cell['latest_analysis']['plan_sha256'] is None
     enqueue.assert_called_once()
     assert str(enqueue.call_args.args[0]) == cell['latest_analysis']['id']
+    with patch("app.services.notebook_service.enqueue_run") as replay_enqueue:
+        replay = client.post(
+            path + "/cells", json=payload, headers={"Idempotency-Key": idempotency_key}
+        )
+    assert replay.status_code == 201 and replay.json()['id'] == cell['id']
+    replay_enqueue.assert_not_called()
+    conflict = client.post(
+        path + "/cells",
+        json={**payload, "question": "Different question"},
+        headers={"Idempotency-Key": idempotency_key},
+    )
+    assert conflict.status_code == 409
     with patch("app.services.analysis_service.enqueue_run") as enqueue_retry:
         retry = client.post(path + f"/cells/{cell['id']}/analysis-runs", json={})
     enqueue_retry.assert_called_once()

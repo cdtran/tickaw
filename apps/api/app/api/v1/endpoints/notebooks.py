@@ -1,7 +1,7 @@
 """Create and reopen notebooks and persist question cells."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -42,8 +42,13 @@ def get_notebook(notebook_id: UUID, session: Session = Depends(get_db)):
 
 
 @router.post("/{notebook_id}/cells", response_model=CellResponse, status_code=201)
-def add_question(notebook_id: UUID, request: QuestionCreate, session: Session = Depends(get_db)):
-    return notebook_service.add_question(session, notebook_id, request)
+def add_question(
+    notebook_id: UUID,
+    request: QuestionCreate,
+    session: Session = Depends(get_db),
+    idempotency_key: UUID | None = Header(None, alias="Idempotency-Key"),
+):
+    return notebook_service.add_question(session, notebook_id, request, idempotency_key)
 
 
 @router.post(

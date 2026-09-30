@@ -148,6 +148,14 @@ registry routes and adapters without changing notebook or analysis-run contracts
 - The execution child has time, memory, row, cell, source-size, and result-size bounds.
 - Workers download only the immutable normalized object belonging to the pinned version.
 - Plans become immutable once assigned, and terminal runs are immutable.
+- Active analysis runs hold 30-second database leases renewed by 10-second heartbeats;
+  another worker reclaims only an expired lease.
+- Transient model and storage failures retry at most three total attempts with persisted
+  exponential backoff. Permanent validation and source errors fail immediately.
+- Question submissions carry durable idempotency keys, so replaying a request after a lost
+  response returns the original cell and run instead of creating duplicate work.
+- Notebook progress shows elapsed time, execution stage, attempt count, and retry countdown;
+  terminal failures can be retried as a new auditable run on the same question cell.
 - Result artifacts include dataset and plan fingerprints.
 - Temporal line charts are emitted only when profiled samples and returned x-axis values are
   uniformly valid ISO dates or timestamps.
@@ -176,10 +184,6 @@ database constraints, and durable result persistence.
 
 ## Next priorities
 
-- Add bounded retries with exponential backoff for transient model and storage failures.
-- Add worker leases or heartbeats for reclaiming genuinely abandoned processing runs.
-- Add submission idempotency keys to prevent duplicate cells and runs after network retries.
-- Add a visible retry action and clearer elapsed-time messaging for failed or slow analyses.
 - Expand model-quality evaluations with representative questions and expected query plans.
 - Add an API-key-backed model route while preserving the stable model-selection contract.
 - Remove unused Celery scaffolding if analysis continues to use Redis Streams directly.

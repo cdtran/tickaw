@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -18,6 +18,8 @@ from packages.data_engine.query_plan import QueryPlan
 from packages.data_engine.result_types import ExecutionSuccess
 
 MAX_STORED_RESULT_BYTES = 2 * 1024**2
+ANALYSIS_LEASE_SECONDS = 30
+MAX_ANALYSIS_ATTEMPTS = 3
 
 
 def canonical_json(value: dict) -> bytes:
@@ -87,17 +89,66 @@ def queued_run_for_cell(cell: NotebookCell) -> AnalysisRun:
     )
 
 
-def start_run(session: Session, run_id: UUID) -> AnalysisRun:
-    """Transition one claimed queued run to processing."""
+def start_run(session: Session, run_id: UUID, worker_id: str = "manual") -> AnalysisRun:
+    """Claim a ready or abandoned run with a renewable database lease."""
     run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
     if run is None:
         raise HTTPException(404, "Analysis run not found.")
-    if run.status != "QUEUED":
-        raise HTTPException(409, "Only a queued analysis run can be started.")
+    now = datetime.now(UTC)
+    ready = run.status == "QUEUED" and (
+        run.next_attempt_at is None or run.next_attempt_at <= now
+    )
+    abandoned = run.status == "PROCESSING" and (
+        run.lease_expires_at is None or run.lease_expires_at <= now
+    )
+    if not (ready or abandoned):
+        raise HTTPException(409, "This analysis run is not ready to be claimed.")
+    if run.attempt_count >= MAX_ANALYSIS_ATTEMPTS:
+        raise HTTPException(409, "This analysis run has exhausted its attempts.")
     run.status = "PROCESSING"
     run.processing_stage = "GENERATING_PLAN" if run.plan_json is None else "DOWNLOADING_DATA"
     run.attempt_count += 1
-    run.started_at = datetime.now(UTC)
+    run.started_at = run.started_at or now
+    run.lease_owner = worker_id
+    run.heartbeat_at = now
+    run.lease_expires_at = now + timedelta(seconds=ANALYSIS_LEASE_SECONDS)
+    run.next_attempt_at = None
+    run.error_code = None
+    run.error_message = None
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def renew_lease(session: Session, run_id: UUID, worker_id: str) -> bool:
+    """Extend a lease only while it is still owned by this active worker."""
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None or run.status != "PROCESSING" or run.lease_owner != worker_id:
+        return False
+    now = datetime.now(UTC)
+    run.heartbeat_at = now
+    run.lease_expires_at = now + timedelta(seconds=ANALYSIS_LEASE_SECONDS)
+    session.commit()
+    return True
+
+
+def schedule_retry(session: Session, run_id: UUID, code: str, message: str) -> AnalysisRun:
+    """Release a failed attempt and schedule bounded exponential backoff."""
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None:
+        raise HTTPException(404, "Analysis run not found.")
+    if run.status != "PROCESSING":
+        raise HTTPException(409, "Only a processing analysis run can be retried.")
+    if run.attempt_count >= MAX_ANALYSIS_ATTEMPTS:
+        return fail_run(session, run_id, code, message)
+    delay_seconds = 2 ** run.attempt_count
+    run.status = "QUEUED"
+    run.processing_stage = "RETRY_WAIT"
+    run.error_code = code
+    run.error_message = message
+    run.next_attempt_at = datetime.now(UTC) + timedelta(seconds=delay_seconds)
+    run.lease_owner = None
+    run.lease_expires_at = None
     session.commit()
     session.refresh(run)
     return run
@@ -172,6 +223,8 @@ def complete_run(
             f"the storage limit is {MAX_STORED_RESULT_BYTES} bytes."
         )
         run.completed_at = datetime.now(UTC)
+        run.lease_owner = None
+        run.lease_expires_at = None
         session.commit()
         raise HTTPException(413, "The structured analysis result exceeds the storage limit.")
 
@@ -182,6 +235,8 @@ def complete_run(
     run.status = "SUCCEEDED"
     run.processing_stage = "COMPLETED"
     run.completed_at = datetime.now(UTC)
+    run.lease_owner = None
+    run.lease_expires_at = None
     session.commit()
     session.refresh(run)
     return run
@@ -205,6 +260,8 @@ def fail_run(
     run.error_message = message
     run.validation_diagnostics = diagnostics
     run.completed_at = datetime.now(UTC)
+    run.lease_owner = None
+    run.lease_expires_at = None
     session.commit()
     session.refresh(run)
     return run
@@ -225,6 +282,8 @@ def request_clarification(
     run.validation_diagnostics = diagnostics
     run.clarification_question = question
     run.completed_at = None
+    run.lease_owner = None
+    run.lease_expires_at = None
     session.commit()
     session.refresh(run)
     return run

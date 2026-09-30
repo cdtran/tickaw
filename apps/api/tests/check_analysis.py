@@ -1,12 +1,19 @@
 """Analysis result persistence checks; run through the disposable migration harness."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.db.session import get_session_factory
 from app.main import app
 from app.models import AnalysisRun, Dataset, DatasetVersion, Notebook, NotebookCell
-from app.services.analysis_service import complete_run, create_run, load_result, start_run
+from app.services.analysis_service import (
+    complete_run,
+    create_run,
+    load_result,
+    renew_lease,
+    schedule_retry,
+    start_run,
+)
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import update
@@ -182,6 +189,38 @@ def main():
         assert failed_run.error_code == "RESULT_TOO_LARGE"
         assert failed_run.completed_at is not None
         assert failed_run.result_json is None
+
+        retry_run = create_run(session, cell.id, plan)
+        retry_run = start_run(session, retry_run.id, "worker-one")
+        assert retry_run.attempt_count == 1
+        assert retry_run.lease_owner == "worker-one"
+        assert retry_run.heartbeat_at is not None and retry_run.lease_expires_at is not None
+        assert renew_lease(session, retry_run.id, "worker-one") is True
+        assert renew_lease(session, retry_run.id, "wrong-worker") is False
+        retry_run = schedule_retry(
+            session, retry_run.id, "MODEL_UNAVAILABLE", "The model is temporarily unavailable."
+        )
+        assert retry_run.status == "QUEUED" and retry_run.processing_stage == "RETRY_WAIT"
+        assert retry_run.next_attempt_at is not None and retry_run.lease_owner is None
+        try:
+            start_run(session, retry_run.id, "too-early")
+        except HTTPException as error:
+            assert error.status_code == 409
+        else:
+            raise AssertionError("A retry must respect its backoff")
+        retry_run.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+        session.commit()
+        retry_run = start_run(session, retry_run.id, "worker-two")
+        assert retry_run.attempt_count == 2 and retry_run.lease_owner == "worker-two"
+        retry_run.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        session.commit()
+        retry_run = start_run(session, retry_run.id, "worker-three")
+        assert retry_run.attempt_count == 3 and retry_run.lease_owner == "worker-three"
+        retry_run = schedule_retry(
+            session, retry_run.id, "MODEL_UNAVAILABLE", "The model is temporarily unavailable."
+        )
+        assert retry_run.status == "FAILED" and retry_run.error_code == "MODEL_UNAVAILABLE"
+        assert retry_run.lease_owner is None and retry_run.completed_at is not None
 
         rejected(
             session,

@@ -31,6 +31,10 @@ class AnalysisRun(Base):
         CheckConstraint("(plan_json IS NULL) = (plan_sha256 IS NULL)", name="plan_pair"),
         CheckConstraint("result_sha256 IS NULL OR length(result_sha256) = 64", name="result_hash"),
         CheckConstraint("result_size_bytes IS NULL OR result_size_bytes >= 0", name="result_size"),
+        CheckConstraint("attempt_count >= 0 AND attempt_count <= 3", name="attempt_count"),
+        CheckConstraint(
+            "(lease_owner IS NULL) = (lease_expires_at IS NULL)", name="lease_pair"
+        ),
         CheckConstraint(
             "status != 'SUCCEEDED' OR (result_json IS NOT NULL AND result_sha256 IS NOT NULL "
             "AND result_size_bytes IS NOT NULL AND result_version IS NOT NULL "
@@ -70,6 +74,22 @@ class AnalysisRun(Base):
     )
     attempt_count: Mapped[int] = mapped_column(
         Integer, server_default=text("0"), comment="Number of times a worker claimed this run."
+    )
+    lease_owner: Mapped[str | None] = mapped_column(
+        Text, comment="Opaque identity of the worker currently processing this run."
+    )
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        index=True,
+        comment="Time after which another worker may reclaim this run.",
+    )
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), comment="Most recent lease renewal by the active worker."
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        index=True,
+        comment="Earliest time a transiently failed run may be retried.",
     )
     stable_model_id: Mapped[str | None] = mapped_column(
         Text, comment="Stable identifier for the model configuration that produced the plan."

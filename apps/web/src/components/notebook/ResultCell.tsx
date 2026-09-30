@@ -291,18 +291,45 @@ export default function ResultCell({
   );
 }
 
-export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) {
+function elapsedLabel(start: string, end: string | null, now: number): string {
+  const seconds = Math.max(0, Math.floor(((end ? Date.parse(end) : now) - Date.parse(start)) / 1000));
+  if (seconds < 60) return `${seconds}s elapsed`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s elapsed`;
+}
+
+export function PersistedResult({
+  analysis,
+  notebookId,
+  cellId,
+  onRetried,
+}: {
+  analysis: AnalysisRunSummary;
+  notebookId: string;
+  cellId: string;
+  onRetried: (run: AnalysisRunSummary) => void;
+}) {
   const [run, setRun] = useState(analysis);
   const [artifact, setArtifact] = useState<StoredAnalysisResult | null>(null);
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    if (["SUCCEEDED", "FAILED", "NEEDS_CLARIFICATION"].includes(run.status)) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [run.status]);
 
   useEffect(() => {
     let active = true;
     setRun(analysis);
     setArtifact(null);
     setError("");
+    setRetrying(false);
+    setSubmitting(false);
 
     async function load() {
       if (!active) return;
@@ -364,6 +391,23 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
     }
   }
 
+  async function retry() {
+    setRetrying(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/v1/notebooks/${encodeURIComponent(notebookId)}/cells/${encodeURIComponent(cellId)}/analysis-runs`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail ?? "Could not retry this analysis.");
+      onRetried(body as AnalysisRunSummary);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not retry this analysis.");
+      setRetrying(false);
+    }
+  }
+
   if (run.status === "NEEDS_CLARIFICATION") {
     return <section className="result-cell clarification" aria-labelledby={`clarify-${run.id}`}>
       <h3 id={`clarify-${run.id}`}>More information needed</h3>
@@ -386,7 +430,7 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
   }
 
   if (run.status === "FAILED") {
-    return <ResultCell result={{
+    return <><ResultCell result={{
       result_version: 1,
       status: "failed",
       error: {
@@ -408,12 +452,30 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
         duration_ms: 0,
         executed_sql: null,
       },
-    }} />;
+    }} />
+      <button type="button" disabled={retrying} onClick={retry}>
+        {retrying ? "Retrying…" : "Retry analysis"}
+      </button>
+      {error && <p role="alert" className="error">{error}</p>}
+    </>;
   }
   if (error) return <p role="alert" className="error">{error}</p>;
   if (!artifact) {
-    const stage = run.processing_stage.toLowerCase().replaceAll("_", " ");
-    return <p role="status" className="hint">Analysis {stage}…</p>;
+    const stages: Record<string, string> = {
+      QUEUED: "Queued",
+      RETRY_WAIT: "Waiting to retry",
+      GENERATING_PLAN: "Generating query plan",
+      DOWNLOADING_DATA: "Loading dataset",
+      EXECUTING: "Running analysis",
+    };
+    const stage = stages[run.processing_stage]
+      ?? run.processing_stage.toLowerCase().replaceAll("_", " ");
+    const elapsed = elapsedLabel(run.started_at ?? run.created_at, run.completed_at, now);
+    const attempt = run.attempt_count ? ` · attempt ${run.attempt_count} of 3` : "";
+    const retryIn = run.next_attempt_at
+      ? ` · retrying in ${Math.max(0, Math.ceil((Date.parse(run.next_attempt_at) - now) / 1000))}s`
+      : "";
+    return <p role="status" className="hint">{stage} · {elapsed}{attempt}{retryIn}</p>;
   }
   return <ResultCell result={artifact.execution} chartSpec={artifact.chart} />;
 }

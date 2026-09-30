@@ -1,5 +1,7 @@
 """Persist notebook questions and their queued analysis runs atomically."""
 
+import hashlib
+import json
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -63,8 +65,37 @@ def detail(session: Session, notebook_id: UUID) -> NotebookDetail:
     )
 
 
-def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -> CellResponse:
+def add_question(
+    session: Session,
+    notebook_id: UUID,
+    request: QuestionCreate,
+    idempotency_key: UUID | None = None,
+) -> CellResponse:
     notebook = get_notebook(session, notebook_id)
+    request_json = json.dumps(request.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    request_sha256 = hashlib.sha256(request_json.encode()).hexdigest()
+    if idempotency_key is not None:
+        lock_value = f"notebook-question:{notebook_id}:{idempotency_key}"
+        session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_value, 0))))
+        existing = session.scalar(
+            select(NotebookCell).where(
+                NotebookCell.notebook_id == notebook_id,
+                NotebookCell.idempotency_key == idempotency_key,
+            )
+        )
+        if existing is not None:
+            if existing.idempotency_request_sha256 != request_sha256:
+                raise HTTPException(409, "This idempotency key was used for different input.")
+            run = session.scalar(
+                select(AnalysisRun)
+                .where(AnalysisRun.notebook_cell_id == existing.id)
+                .order_by(AnalysisRun.created_at.desc(), AnalysisRun.id.desc())
+            )
+            return CellResponse.model_validate(existing).model_copy(
+                update={
+                    "latest_analysis": AnalysisRunSummary.model_validate(run) if run else None
+                }
+            )
     version = session.get(DatasetVersion, request.dataset_version_id)
     if version is None:
         raise HTTPException(404, "Dataset version not found.")
@@ -79,6 +110,8 @@ def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -
         dataset_version_id=version.id,
         question=request.question,
         stable_model_id=request.stable_model_id,
+        idempotency_key=idempotency_key,
+        idempotency_request_sha256=request_sha256 if idempotency_key is not None else None,
     )
     session.add(cell)
     session.flush()

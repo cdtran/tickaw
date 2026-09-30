@@ -91,6 +91,8 @@ export type AnalysisRunSummary = {
   status: "QUEUED" | "PROCESSING" | "NEEDS_CLARIFICATION" | "SUCCEEDED" | "FAILED";
   processing_stage: string;
   attempt_count: number;
+  heartbeat_at: string | null;
+  next_attempt_at: string | null;
   plan_sha256: string | null;
   result_sha256: string | null;
   error_code: string | null;
@@ -98,5 +100,6 @@ export type AnalysisRunSummary = {
   validation_diagnostics: Array<Record<string, unknown>> | null;
   clarification_question: string | null;
   created_at: string;
+  started_at: string | null;
   completed_at: string | null;
 };

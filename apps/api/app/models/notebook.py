@@ -2,7 +2,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, func, text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -30,6 +30,11 @@ class NotebookCell(Base):
     __table_args__ = (
         CheckConstraint("length(btrim(question)) BETWEEN 1 AND 4000", name="question_length"),
         CheckConstraint("status IN ('SAVED')", name="status"),
+        CheckConstraint(
+            "idempotency_request_sha256 IS NULL OR length(idempotency_request_sha256) = 64",
+            name="idempotency_hash",
+        ),
+        UniqueConstraint("notebook_id", "idempotency_key", name="notebook_idempotency_key"),
     )
     id: Mapped[UUID] = mapped_column(
         primary_key=True, default=uuid4, comment="Stable identifier for the notebook cell."
@@ -47,6 +52,12 @@ class NotebookCell(Base):
     question: Mapped[str] = mapped_column(Text, comment="User's natural-language question.")
     stable_model_id: Mapped[str] = mapped_column(
         Text, comment="Stable model configuration selected when the question was submitted."
+    )
+    idempotency_key: Mapped[UUID | None] = mapped_column(
+        comment="Client request identity used to safely replay question submission."
+    )
+    idempotency_request_sha256: Mapped[str | None] = mapped_column(
+        Text, comment="Fingerprint of the request bound to the idempotency key."
     )
     status: Mapped[str] = mapped_column(
         Text, server_default=text("'SAVED'"), comment="Question-cell lifecycle state."
