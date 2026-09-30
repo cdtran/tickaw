@@ -56,6 +56,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       minio:
         condition: service_healthy
     restart: unless-stopped
@@ -83,7 +85,10 @@ services:
       retries: 10
   redis:
     image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
     ports: ["6379:6379"]
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -108,5 +113,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   minio_data:
   web_node_modules:

@@ -20,8 +20,8 @@ is not currently deployed there.
 - Resource-bounded DuckDB execution against immutable Parquet snapshots.
 - Durable analysis results, integrity hashes, safe failure records, and frontend polling.
 - Automatic table, bar-chart, and temporal line-chart rendering.
-- PostgreSQL-backed analysis queue with `LISTEN/NOTIFY` wake-ups and a 30-second recovery
-  scan for missed notifications or abandoned work.
+- Redis Stream analysis queue with consumer acknowledgments and a PostgreSQL recovery
+  scan for missed deliveries or abandoned work.
 
 ## Analysis lifecycle
 
@@ -34,7 +34,7 @@ Browser
   ▼
 FastAPI ── one transaction ──► notebook_cells + analysis_runs (QUEUED)
                                       │
-                                      │ PostgreSQL NOTIFY
+                                      │ Redis Stream message
                                       ▼
                                analysis worker
                                       │
@@ -48,10 +48,11 @@ FastAPI ── one transaction ──► notebook_cells + analysis_runs (QUEUED)
                          persisted chart and table
 ```
 
-PostgreSQL is both the source of truth and the durable queue. `NOTIFY` is only a wake-up
-signal: workers always claim and verify the database row, so a missed notification cannot
-lose a job. One analysis-worker process handles all analysis stages; the stage names are
-progress states, not separate services.
+PostgreSQL is the source of truth for each run. The API publishes its committed run ID to a
+Redis Stream; the worker acknowledges it after the database run reaches a terminal state.
+The worker also scans PostgreSQL every 30 seconds so a broker outage between database commit
+and publish cannot lose a run. One analysis-worker process handles all analysis stages; the
+stage names are progress states, not separate services.
 
 ## Stack and layout
 
@@ -65,8 +66,8 @@ progress states, not separate services.
 - `docs` — design notes, walkthroughs, and local-development guides
 
 The local stack runs the API, web development server, profiling worker, analysis worker,
-PostgreSQL, MinIO, and Redis in Docker. Redis is currently scaffold infrastructure and is
-not used by the analysis queue. Ollama runs on the host machine.
+PostgreSQL, MinIO, and Redis in Docker. Redis stores the analysis queue with append-only
+persistence enabled locally. Ollama runs on the host machine.
 
 The API and both workers can initially run as containers on one application host; they do
 not require separate physical servers. PostgreSQL, S3-compatible storage, and the model
@@ -170,7 +171,7 @@ docker compose exec -T api python -m tests.check_migrations
 ```
 
 The migration harness creates and removes its own temporary PostgreSQL database. It verifies
-fresh upgrades, schema agreement, downgrade/re-upgrade behavior, queue notifications,
+fresh upgrades, schema agreement, downgrade/re-upgrade behavior, queue insertion,
 database constraints, and durable result persistence.
 
 ## Next priorities
@@ -181,7 +182,7 @@ database constraints, and durable result persistence.
 - Add a visible retry action and clearer elapsed-time messaging for failed or slow analyses.
 - Expand model-quality evaluations with representative questions and expected query plans.
 - Add an API-key-backed model route while preserving the stable model-selection contract.
-- Remove Redis/Celery scaffolding if it remains unused.
+- Remove unused Celery scaffolding if analysis continues to use Redis Streams directly.
 - Complete production deployment, observability, and worker-concurrency configuration.
 
 Additional guides:

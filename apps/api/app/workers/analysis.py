@@ -1,21 +1,23 @@
 """Durable analysis worker for normalized Parquet query execution."""
 
 import logging
+import os
+import socket
 import tempfile
 import time
 from pathlib import Path
 from uuid import UUID
 
-import psycopg
+import redis
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import create_engine, select, text
-from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.db.session import get_session_factory
 from app.models import AnalysisRun, DatasetVersion
+from app.services.analysis_queue import GROUP, STREAM, get_queue
 from app.services.analysis_service import (
     complete_run,
     fail_run,
@@ -30,8 +32,8 @@ from packages.data_engine.execution import ExecutionLimits, catalog_from_profile
 from packages.data_engine.result_types import ExecutionFailure
 
 logger = logging.getLogger(__name__)
-QUEUE_CHANNEL = "analysis_run_queued"
 RECOVERY_SCAN_SECONDS = 30.0
+PENDING_IDLE_MS = 5 * 60 * 1000
 
 
 class AnalysisProcessingError(Exception):
@@ -185,35 +187,77 @@ def run_once() -> bool:
     return False
 
 
-def listener_connection() -> psycopg.Connection:
-    """Open the dedicated autocommit connection required by LISTEN/NOTIFY."""
-    url = make_url(get_settings().database_url.get_secret_value()).set(drivername="postgresql")
-    connection = psycopg.connect(url.render_as_string(hide_password=False), autocommit=True)
-    connection.execute(f"LISTEN {QUEUE_CHANNEL}")
-    return connection
+def ensure_group(queue: redis.Redis) -> None:
+    try:
+        queue.xgroup_create(STREAM, GROUP, id="0", mkstream=True)
+    except redis.ResponseError as error:
+        if "BUSYGROUP" not in str(error):
+            raise
 
 
-def wait_for_notification(connection: psycopg.Connection) -> None:
-    """Wait for a queue wake-up, with a recovery scan timeout for missed events."""
-    next(
-        connection.notifies(timeout=RECOVERY_SCAN_SECONDS, stop_after=1),
-        None,
-    )
+def acknowledge(queue: redis.Redis, message_id: str) -> None:
+    queue.xack(STREAM, GROUP, message_id)
+    queue.xdel(STREAM, message_id)
+
+
+def process_message(queue: redis.Redis, message_id: str, values: dict) -> None:
+    try:
+        run_id = UUID(values["run_id"])
+    except (KeyError, TypeError, ValueError):
+        logger.error("Discarding invalid analysis queue message=%s", message_id)
+        acknowledge(queue, message_id)
+        return
+    # The advisory lock protects the long-running job against duplicate delivery.
+    run_job(run_id)
+    with get_session_factory()() as session:
+        run = session.get(AnalysisRun, run_id)
+        terminal = run is None or run.status in {"SUCCEEDED", "FAILED"}
+    if terminal:
+        acknowledge(queue, message_id)
+
+
+def recover_pending(queue: redis.Redis, consumer: str) -> None:
+    # A crashed consumer leaves its delivery pending. Reclaim only after the
+    # longest normal model request and correction attempt have had time to finish.
+    cursor = "0-0"
+    while True:
+        cursor, messages, _ = queue.xautoclaim(
+            STREAM, GROUP, consumer, PENDING_IDLE_MS, start_id=cursor, count=25
+        )
+        for message_id, values in messages:
+            process_message(queue, message_id, values)
+        if cursor == "0-0":
+            return
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    consumer = f"{socket.gethostname()}-{os.getpid()}"
+    last_recovery = 0.0
     while True:
         try:
-            with listener_connection() as listener:
-                logger.info("Listening for analysis work on PostgreSQL channel=%s", QUEUE_CHANNEL)
-                while True:
-                    while run_once():
-                        pass
-                    wait_for_notification(listener)
+            queue = get_queue()
+            ensure_group(queue)
+            now = time.monotonic()
+            if now - last_recovery >= RECOVERY_SCAN_SECONDS:
+                while run_once():
+                    pass
+                recover_pending(queue, consumer)
+                last_recovery = time.monotonic()
+            deliveries = queue.xreadgroup(GROUP, consumer, {STREAM: ">"}, count=1, block=5000)
+            for _, messages in deliveries:
+                for message_id, values in messages:
+                    process_message(queue, message_id, values)
+        except redis.RedisError:
+            logger.exception("Analysis queue unavailable; scanning durable database")
+            try:
+                run_once()
+            except Exception:
+                logger.exception("Analysis database recovery scan failed")
+            time.sleep(1)
         except Exception:
-            logger.exception("Analysis queue listener failed; queued runs remain durable")
-        time.sleep(1)
+            logger.exception("Analysis worker iteration failed; queued runs remain durable")
+            time.sleep(1)
 
 
 if __name__ == "__main__":

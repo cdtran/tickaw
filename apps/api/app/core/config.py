@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
     database_url: SecretStr
+    redis_url: str = "redis://redis:6379/0"
     object_storage_bucket: str = "data-notebook-dev"
     aws_region: str = "us-east-1"
     s3_endpoint_url: str | None = None

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AnalysisRun, DatasetVersion, NotebookCell
 from app.schemas.analysis import StoredAnalysisResult
+from app.services.analysis_queue import enqueue_run
 from packages.charting.specs import chart_spec_for
 from packages.data_engine.query_plan import QueryPlan
 from packages.data_engine.result_types import ExecutionSuccess
@@ -70,6 +71,7 @@ def create_run(
     run = AnalysisRun(**values)
     session.add(run)
     session.commit()
+    enqueue_run(run.id)
     session.refresh(run)
     return run
 

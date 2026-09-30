@@ -1,16 +1,14 @@
 """API persistence checks; run only via the disposable migration harness."""
 from datetime import UTC, datetime
+from unittest.mock import patch
 from uuid import uuid4
 
-import psycopg
-from app.core.config import get_settings
 from app.db.session import get_session_factory
 from app.main import app
 from app.models import AnalysisRun, Dataset, DatasetVersion, Notebook
 from app.services.plan_service import PlanGenerationError, generate_plan
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import IntegrityError
 
 from packages.llm_gateway.contracts import ModelUsage, PlanResponse
@@ -73,15 +71,9 @@ def main():
     assert [model["id"] for model in models.json()] == ["qwen-local"]
     payload = {"question": " Revenue by region? ", "dataset_version_id": version_id,
                "stable_model_id": "qwen-local"}
-    database_url = make_url(get_settings().database_url.get_secret_value()).set(
-        drivername="postgresql"
-    )
-    with psycopg.connect(
-        database_url.render_as_string(hide_password=False), autocommit=True
-    ) as listener:
-        listener.execute("LISTEN analysis_run_queued")
+    with patch("app.services.notebook_service.enqueue_run") as enqueue:
+        enqueue.return_value = False  # Broker outage must not roll back the durable run.
         response = client.post(path + "/cells", json=payload)
-        notification = next(listener.notifies(timeout=2, stop_after=1), None)
     assert response.status_code == 201, response.text
     cell = response.json()
     assert cell['question'] == "Revenue by region?" and cell['status'] == "SAVED"
@@ -91,9 +83,12 @@ def main():
     assert cell['latest_analysis']['status'] == 'QUEUED'
     assert cell['latest_analysis']['processing_stage'] == 'QUEUED'
     assert cell['latest_analysis']['plan_sha256'] is None
-    assert notification is not None
-    assert notification.payload == cell['latest_analysis']['id']
-    retry = client.post(path + f"/cells/{cell['id']}/analysis-runs", json={})
+    enqueue.assert_called_once()
+    assert str(enqueue.call_args.args[0]) == cell['latest_analysis']['id']
+    with patch("app.services.analysis_service.enqueue_run") as enqueue_retry:
+        retry = client.post(path + f"/cells/{cell['id']}/analysis-runs", json={})
+    enqueue_retry.assert_called_once()
+    assert str(enqueue_retry.call_args.args[0]) == retry.json()['id']
     assert retry.status_code == 202, retry.text
     assert retry.json()['status'] == 'QUEUED'
     assert retry.json()['plan_sha256'] is None

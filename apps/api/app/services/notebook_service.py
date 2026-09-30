@@ -1,4 +1,4 @@
-"""Short transactions for notebook persistence; no analysis is scheduled yet."""
+"""Persist notebook questions and their queued analysis runs atomically."""
 
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.models import AnalysisRun, DatasetVersion, Notebook, NotebookCell
 from app.schemas.analysis import AnalysisRunSummary
 from app.schemas.notebook import CellResponse, NotebookDetail, QuestionCreate
+from app.services.analysis_queue import enqueue_run
 from app.services.analysis_service import queued_run_for_cell
 from app.services.llm_service import get_model_registry
 from packages.llm_gateway.registry import UnknownModelError
@@ -85,6 +86,7 @@ def add_question(session: Session, notebook_id: UUID, request: QuestionCreate) -
     session.add(run)
     notebook.updated_at = func.now()
     session.commit()
+    enqueue_run(run.id)
     session.refresh(cell)
     session.refresh(run)
     return CellResponse.model_validate(cell).model_copy(
