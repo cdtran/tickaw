@@ -77,6 +77,11 @@ class QueryPlan(StrictModel):
 class PlanError(ValueError):
     """A structurally valid plan has unsupported or ambiguous semantics."""
 
+    def __init__(self, message: str, *, code: str = "UNSUPPORTED_SEMANTICS", details=None):
+        self.code = code
+        self.details = details or {}
+        super().__init__(message)
+
 
 def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
     """Validate an untrusted plan against the pinned dataset's trusted catalog.
@@ -95,7 +100,11 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
 
     def column_type(name):
         if name not in columns:
-            raise PlanError(f"Unknown column: {name}")
+            raise PlanError(
+                f"Unknown column: {name}",
+                code="UNKNOWN_COLUMN",
+                details={"column": name},
+            )
         return columns[name]
 
     if len(set(plan.dimensions)) != len(plan.dimensions):
@@ -114,7 +123,16 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
             continue
         kind = column_type(metric.column)
         if metric.op in {"sum", "avg"} and kind not in {"integer", "number"}:
-            raise PlanError(f"{metric.op} requires a numeric column")
+            raise PlanError(
+                f"{metric.op} requires a numeric column",
+                code="METRIC_TYPE_MISMATCH",
+                details={
+                    "operation": metric.op,
+                    "column": metric.column,
+                    "actual_type": kind,
+                    "expected_types": ["integer", "number"],
+                },
+            )
         if metric.op in {"min", "max"} and kind == "boolean":
             raise PlanError("min/max on booleans is not supported in v2")
 

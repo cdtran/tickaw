@@ -94,6 +94,7 @@ def execute_plan(
     dataset_version_id: str,
     columns: dict[str, ColumnType],
     limits: ExecutionLimits | None = None,
+    question_meaning_checked: bool = False,
 ) -> ExecutionResult:
     """Return success with a table, or a structured failure with safe diagnostics.
 
@@ -155,6 +156,7 @@ def execute_plan(
                 "plan": normalized,
                 "columns": columns,
                 "limits": policy.model_dump(),
+                "question_meaning_checked": question_meaning_checked,
             }
             (root / "request.json").write_text(json.dumps(request, allow_nan=False))
             # No inherited API keys, database URLs, home directory, or cloud credentials.

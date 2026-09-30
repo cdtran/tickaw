@@ -22,6 +22,14 @@ Run all questions against the configured model:
 docker compose run --rm api python -m evals.model_quality.run --model qwen-local
 ```
 
+Use repeatable `--case` arguments for a targeted, lower-cost run:
+
+```sh
+docker compose run --rm api python -m evals.model_quality.run \
+  --case average-books-sold-per-day \
+  --case revenue-by-category-and-date
+```
+
 The runner emits one JSON line per case and exits nonzero if actual outcomes differ from the
 reviewed expectations. A live failure is a regression signal or a known gap to investigate;
 do not weaken an expectation merely to make a model pass. Pin model and prompt versions in

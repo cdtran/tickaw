@@ -160,6 +160,7 @@ def process_run(session: Session, run_id: UUID) -> None:
             parquet_path=parquet,
             dataset_version_id=str(version.id),
             columns=catalog,
+            question_meaning_checked=True,
         )
     if isinstance(result, ExecutionFailure):
         fail_run(session, run.id, result.error.code, result.error.message)

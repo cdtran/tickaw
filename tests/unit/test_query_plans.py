@@ -125,6 +125,21 @@ def test_catalog_and_alias_case_collisions():
         validate_plan(basic(), COLUMNS | {"TOTAL_REVENUE": "number"})
 
 
+def test_metric_type_error_has_safe_structured_details():
+    payload = basic() | {
+        "metrics": [{"op": "avg", "column": "region", "alias": "average_region"}]
+    }
+    with pytest.raises(PlanError) as captured:
+        validate_plan(payload, COLUMNS)
+    assert captured.value.code == "METRIC_TYPE_MISMATCH"
+    assert captured.value.details == {
+        "operation": "avg",
+        "column": "region",
+        "actual_type": "text",
+        "expected_types": ["integer", "number"],
+    }
+
+
 def test_text_dimension_can_reach_runtime_line_chart_validation():
     plan = basic() | {"dimensions": ["date_text"], "presentation": {"type": "line"}}
     validated = validate_plan(plan, COLUMNS | {"date_text": "text"})

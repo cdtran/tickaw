@@ -6,6 +6,11 @@ from sqlalchemy.orm import Session
 from app.models import AnalysisRun, DatasetVersion, NotebookCell
 from packages.data_engine.execution import catalog_from_profile
 from packages.data_engine.query_plan import PlanError, QueryPlan, validate_plan
+from packages.data_engine.question_semantics import (
+    check_question_meaning,
+    concept_columns,
+    requested_concepts,
+)
 from packages.data_engine.temporal import parse_temporal
 from packages.llm_gateway.adapters.openai_compatible import ModelProviderError
 from packages.llm_gateway.contracts import PlanRequest, PlanResponse
@@ -23,11 +28,15 @@ class PlanGenerationError(Exception):
 def safe_validation_diagnostic(error: ValidationError | PlanError) -> dict:
     """Return bounded, display-safe facts without retaining model-authored plan JSON."""
     if isinstance(error, PlanError):
-        message = str(error)
-        if message.startswith("Unknown column: "):
-            column = message.removeprefix("Unknown column: ").strip()[:128]
-            return {"code": "UNKNOWN_COLUMN", "column": column}
-        return {"code": "UNSUPPORTED_SEMANTICS", "message": message[:300]}
+        diagnostic = {"code": error.code}
+        for key, value in error.details.items():
+            if isinstance(value, str):
+                diagnostic[key] = value[:128]
+            elif isinstance(value, list):
+                diagnostic[key] = [str(item)[:64] for item in value[:8]]
+        if not error.details:
+            diagnostic["message"] = str(error)[:300]
+        return diagnostic
     issues = []
     for item in error.errors(include_url=False, include_context=False)[:8]:
         issues.append({
@@ -38,15 +47,33 @@ def safe_validation_diagnostic(error: ValidationError | PlanError) -> dict:
     return {"code": "MALFORMED_PLAN", "issues": issues}
 
 
-def missing_data_clarification(diagnostics: list[dict]) -> str | None:
+def missing_data_clarification(
+    diagnostics: list[dict], question: str = "", catalog: dict[str, str] | None = None
+) -> str | None:
     missing = sorted({item["column"] for item in diagnostics if item["code"] == "UNKNOWN_COLUMN"})
-    if not missing:
-        return None
-    names = ", ".join(f"“{name}”" for name in missing[:4])
-    return (
-        f"This dataset does not contain the field {names}. "
-        "Which available field should be used instead, or how should it be calculated from the available fields?"
-    )
+    if missing:
+        names = ", ".join(f"“{name}”" for name in missing[:4])
+        return (
+            f"This dataset does not contain the field {names}. Which available field should be "
+            "used instead, or how should it be calculated from the available fields?"
+        )
+    concepts = requested_concepts(question)
+    if concepts and catalog is not None:
+        unavailable = sorted(
+            concept
+            for concept in concepts
+            if not concept_columns(concept, catalog)
+        )
+        if unavailable and any(
+            item["code"] in {"METRIC_TYPE_MISMATCH", "MISSING_MEASURE", "SEMANTIC_SUBSTITUTION"}
+            for item in diagnostics
+        ):
+            concept = unavailable[0]
+            return (
+                f"This dataset does not contain a recognized {concept} field. Which available "
+                "field should be used instead, or how should it be calculated?"
+            )
+    return None
 
 
 def temporal_text_columns(profile: dict, catalog: dict[str, str]) -> set[str]:
@@ -118,7 +145,20 @@ def generate_plan(
         try:
             response = gateway.generate_plan(cell.stable_model_id, request)
             normalized = normalize_presentation(response.payload, catalog, line_eligible)
-            return validate_plan(normalized, catalog), response
+            plan = validate_plan(normalized, catalog)
+            meaning_issue = check_question_meaning(
+                cell.question,
+                plan,
+                catalog,
+                clarification=run.clarification_answer,
+            )
+            if meaning_issue:
+                raise PlanError(
+                    meaning_issue.message,
+                    code=meaning_issue.code,
+                    details=meaning_issue.diagnostic() | {"message": meaning_issue.message},
+                )
+            return plan, response
         except ModelProviderError as error:
             raise PlanGenerationError(
                 "MODEL_UNAVAILABLE", "The selected model could not generate a query plan."
@@ -126,7 +166,7 @@ def generate_plan(
         except (ValidationError, PlanError) as error:
             diagnostics.append(safe_validation_diagnostic(error))
             if attempt == 1:
-                clarification = missing_data_clarification(diagnostics)
+                clarification = missing_data_clarification(diagnostics, cell.question, catalog)
                 if clarification:
                     raise PlanGenerationError(
                         "UNANSWERABLE_WITH_DATA",

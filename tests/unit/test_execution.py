@@ -83,6 +83,13 @@ def test_exact_limit_is_not_reported_as_truncated(source):
     assert not result.table.warnings
 
 
+def test_prechecked_question_meaning_is_reported(source):
+    result = execute(source, question_meaning_checked=True)
+    assert {check.name: check.status for check in result.table.checks}[
+        "question_meaning"
+    ] == "passed"
+
+
 def test_lookahead_row_is_removed(source):
     result = execute(source, plan() | {"limit": 2})
     assert result.status == "succeeded"

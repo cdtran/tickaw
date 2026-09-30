@@ -76,7 +76,7 @@ def execution_connection(policy):
     return connection
 
 
-def encode_table(description, raw_rows, plan, catalog, truncated):
+def encode_table(description, raw_rows, plan, catalog, truncated, question_meaning_checked=False):
     names = [item[0] for item in description]
     expected_names = plan.dimensions + [metric.alias for metric in plan.metrics]
     if names != expected_names or any(len(row) != len(names) for row in raw_rows):
@@ -155,7 +155,12 @@ def encode_table(description, raw_rows, plan, catalog, truncated):
             status="passed" if plan.dimensions else "not_checked",
         )
     )
-    checks.append(ResultCheck(name="question_meaning", status="not_checked"))
+    checks.append(
+        ResultCheck(
+            name="question_meaning",
+            status="passed" if question_meaning_checked else "not_checked",
+        )
+    )
     return TableResult(
         columns=result_columns,
         rows=[list(row) for row in zip(*encoded_columns)] if raw_rows else [],
@@ -203,7 +208,14 @@ def run(request, source):
         result = connection.execute(sql)
         description = result.description
         rows = result.fetchmany(plan.limit + 1)
-        return encode_table(description, rows[: plan.limit], plan, catalog, len(rows) > plan.limit)
+        return encode_table(
+            description,
+            rows[: plan.limit],
+            plan,
+            catalog,
+            len(rows) > plan.limit,
+            request.get("question_meaning_checked", False),
+        )
 
 
 def main():
