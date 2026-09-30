@@ -23,7 +23,10 @@ from app.db.base import Base
 class AnalysisRun(Base):
     __tablename__ = "analysis_runs"
     __table_args__ = (
-        CheckConstraint("status IN ('QUEUED', 'PROCESSING', 'SUCCEEDED', 'FAILED')", name="status"),
+        CheckConstraint(
+            "status IN ('QUEUED', 'PROCESSING', 'NEEDS_CLARIFICATION', 'SUCCEEDED', 'FAILED')",
+            name="status",
+        ),
         CheckConstraint("plan_sha256 IS NULL OR length(plan_sha256) = 64", name="plan_hash"),
         CheckConstraint("(plan_json IS NULL) = (plan_sha256 IS NULL)", name="plan_pair"),
         CheckConstraint("result_sha256 IS NULL OR length(result_sha256) = 64", name="result_hash"),
@@ -97,6 +100,15 @@ class AnalysisRun(Base):
     )
     error_message: Mapped[str | None] = mapped_column(
         Text, comment="Safe human-readable failure description."
+    )
+    validation_diagnostics: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB, comment="Safe structured reasons why generated plans were rejected."
+    )
+    clarification_question: Mapped[str | None] = mapped_column(
+        Text, comment="Specific question that must be answered before planning can resume."
+    )
+    clarification_answer: Mapped[str | None] = mapped_column(
+        Text, comment="User answer supplied to resume this same analysis run."
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), comment="Time the run was created."

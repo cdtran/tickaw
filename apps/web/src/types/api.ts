@@ -88,13 +88,15 @@ export type StoredAnalysisResult = {
 
 export type AnalysisRunSummary = {
   id: string;
-  status: "QUEUED" | "PROCESSING" | "SUCCEEDED" | "FAILED";
+  status: "QUEUED" | "PROCESSING" | "NEEDS_CLARIFICATION" | "SUCCEEDED" | "FAILED";
   processing_stage: string;
   attempt_count: number;
   plan_sha256: string | null;
   result_sha256: string | null;
   error_code: string | null;
   error_message: string | null;
+  validation_diagnostics: Array<Record<string, unknown>> | null;
+  clarification_question: string | null;
   created_at: string;
   completed_at: string | null;
 };

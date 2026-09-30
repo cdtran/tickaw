@@ -187,7 +187,13 @@ def complete_run(
     return run
 
 
-def fail_run(session: Session, run_id: UUID, code: str, message: str) -> AnalysisRun:
+def fail_run(
+    session: Session,
+    run_id: UUID,
+    code: str,
+    message: str,
+    diagnostics: list[dict] | None = None,
+) -> AnalysisRun:
     run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
     if run is None:
         raise HTTPException(404, "Analysis run not found.")
@@ -197,8 +203,46 @@ def fail_run(session: Session, run_id: UUID, code: str, message: str) -> Analysi
     run.processing_stage = "FAILED"
     run.error_code = code
     run.error_message = message
+    run.validation_diagnostics = diagnostics
     run.completed_at = datetime.now(UTC)
     session.commit()
+    session.refresh(run)
+    return run
+
+
+def request_clarification(
+    session: Session, run_id: UUID, question: str, diagnostics: list[dict]
+) -> AnalysisRun:
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None:
+        raise HTTPException(404, "Analysis run not found.")
+    if run.status != "PROCESSING":
+        raise HTTPException(409, "Only a processing run can request clarification.")
+    run.status = "NEEDS_CLARIFICATION"
+    run.processing_stage = "NEEDS_CLARIFICATION"
+    run.error_code = "UNANSWERABLE_WITH_DATA"
+    run.error_message = question
+    run.validation_diagnostics = diagnostics
+    run.clarification_question = question
+    run.completed_at = None
+    session.commit()
+    session.refresh(run)
+    return run
+
+
+def answer_clarification(session: Session, run_id: UUID, answer: str) -> AnalysisRun:
+    run = session.scalar(select(AnalysisRun).where(AnalysisRun.id == run_id).with_for_update())
+    if run is None:
+        raise HTTPException(404, "Analysis run not found.")
+    if run.status != "NEEDS_CLARIFICATION":
+        raise HTTPException(409, "This analysis run is not waiting for clarification.")
+    run.clarification_answer = answer
+    run.status = "QUEUED"
+    run.processing_stage = "QUEUED"
+    run.error_code = None
+    run.error_message = None
+    session.commit()
+    enqueue_run(run.id)
     session.refresh(run)
     return run
 

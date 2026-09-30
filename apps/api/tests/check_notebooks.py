@@ -7,6 +7,7 @@ from app.db.session import get_session_factory
 from app.main import app
 from app.models import AnalysisRun, Dataset, DatasetVersion, Notebook
 from app.services.plan_service import PlanGenerationError, generate_plan
+from app.services.analysis_service import request_clarification, start_run
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
@@ -124,13 +125,71 @@ def main():
         with get_session_factory()() as session:
             generate_plan(session, session.get(AnalysisRun, cell['latest_analysis']['id']), fake_gateway)
     except PlanGenerationError as invalid:
-        assert invalid.code == 'INVALID_PLAN'
+        assert invalid.code == 'UNANSWERABLE_WITH_DATA'
+        assert invalid.diagnostics == [
+            {'code': 'UNKNOWN_COLUMN', 'column': 'invented_column'},
+            {'code': 'UNKNOWN_COLUMN', 'column': 'invented_column'},
+        ]
+        assert 'does not contain' in str(invalid)
     else:
         raise AssertionError('Expected invalid plan generation to fail')
     assert len(fake_gateway.calls) == 2
     retry_feedback = fake_gateway.calls[1][1].validation_feedback or ''
     assert 'previous query plan was rejected' in retry_feedback
     assert 'invented_column' in retry_feedback
+    fake_gateway.calls.clear()
+
+    def malformed(stable_model_id, request):
+        result = original_generate(stable_model_id, request)
+        return result.model_copy(update={"payload": {"plan_version": "two"}})
+
+    fake_gateway.generate_plan = malformed
+    try:
+        with get_session_factory()() as session:
+            generate_plan(session, session.get(AnalysisRun, cell['latest_analysis']['id']), fake_gateway)
+    except PlanGenerationError as invalid:
+        assert invalid.code == 'INVALID_PLAN'
+        assert all(item['code'] == 'MALFORMED_PLAN' for item in invalid.diagnostics)
+        assert 'malformed or unsupported' in str(invalid)
+    else:
+        raise AssertionError('Expected malformed plan generation to fail')
+
+    with get_session_factory()() as session:
+        run = start_run(session, retry.json()['id'])
+        request_clarification(
+            session,
+            run.id,
+            'This dataset has revenue but no number of books sold. How should sales be calculated?',
+            [{'code': 'UNKNOWN_COLUMN', 'column': 'books_sold'}],
+        )
+    waiting = client.get(f"/api/v1/analysis-runs/{retry.json()['id']}")
+    assert waiting.status_code == 200
+    assert waiting.json()['status'] == 'NEEDS_CLARIFICATION'
+    assert waiting.json()['validation_diagnostics'][0]['column'] == 'books_sold'
+    with patch("app.services.analysis_service.enqueue_run") as enqueue_resume:
+        resumed = client.post(
+            f"/api/v1/analysis-runs/{retry.json()['id']}/clarification",
+            json={'answer': 'Use revenue as the result instead.'},
+        )
+    assert resumed.status_code == 202, resumed.text
+    assert resumed.json()['id'] == retry.json()['id']
+    assert resumed.json()['status'] == 'QUEUED'
+    enqueue_resume.assert_called_once()
+    fake_gateway.generate_plan = original_generate
+    fake_gateway.calls.clear()
+    with get_session_factory()() as session:
+        generate_plan(session, session.get(AnalysisRun, retry.json()['id']), fake_gateway)
+    assert fake_gateway.calls[0][1].question.endswith(
+        'User clarification: Use revenue as the result instead.'
+    )
+    assert client.post(
+        f"/api/v1/analysis-runs/{retry.json()['id']}/clarification",
+        json={'answer': 'again'},
+    ).status_code == 409
+    assert client.post(
+        f"/api/v1/analysis-runs/{retry.json()['id']}/clarification",
+        json={'answer': '   '},
+    ).status_code == 422
     # A new client/request/session models a reload, without in-memory UI state.
     loaded = TestClient(app).get(path).json()
     assert loaded['cells'][0]['id'] == cell['id']

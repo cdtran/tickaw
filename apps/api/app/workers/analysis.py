@@ -21,6 +21,7 @@ from app.services.analysis_queue import GROUP, STREAM, get_queue
 from app.services.analysis_service import (
     complete_run,
     fail_run,
+    request_clarification,
     set_processing_stage,
     start_run,
     store_plan,
@@ -143,7 +144,12 @@ def run_job(run_id: UUID) -> bool:
                     except AnalysisProcessingError as error:
                         fail_run(session, run.id, error.code, str(error))
                     except PlanGenerationError as error:
-                        fail_run(session, run.id, error.code, str(error))
+                        if error.code == "UNANSWERABLE_WITH_DATA":
+                            request_clarification(session, run.id, str(error), error.diagnostics)
+                        else:
+                            fail_run(
+                                session, run.id, error.code, str(error), error.diagnostics
+                            )
                     except (BotoCoreError, ClientError):
                         logger.exception("Storage failure analysis_run=%s", run.id)
                         fail_run(
@@ -211,7 +217,7 @@ def process_message(queue: redis.Redis, message_id: str, values: dict) -> None:
     run_job(run_id)
     with get_session_factory()() as session:
         run = session.get(AnalysisRun, run_id)
-        terminal = run is None or run.status in {"SUCCEEDED", "FAILED"}
+        terminal = run is None or run.status in {"NEEDS_CLARIFICATION", "SUCCEEDED", "FAILED"}
     if terminal:
         acknowledge(queue, message_id)
 

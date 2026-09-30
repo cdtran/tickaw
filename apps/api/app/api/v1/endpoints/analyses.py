@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models import AnalysisRun
-from app.schemas.analysis import AnalysisRunResponse, StoredAnalysisResult
-from app.services.analysis_service import load_result
+from app.schemas.analysis import AnalysisRunResponse, ClarificationAnswer, StoredAnalysisResult
+from app.services.analysis_service import answer_clarification, load_result
 
 router = APIRouter(prefix="/analysis-runs", tags=["analysis"])
 
@@ -29,3 +29,12 @@ def analysis_run(run_id: UUID, session: Annotated[Session, Depends(get_db)]):
 @router.get("/{run_id}/result", response_model=StoredAnalysisResult)
 def analysis_result(run_id: UUID, session: Annotated[Session, Depends(get_db)]):
     return load_result(get_run(session, run_id))
+
+
+@router.post("/{run_id}/clarification", response_model=AnalysisRunResponse, status_code=202)
+def clarify_analysis(
+    run_id: UUID,
+    payload: ClarificationAnswer,
+    session: Annotated[Session, Depends(get_db)],
+):
+    return answer_clarification(session, run_id, payload.answer)

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import type { FormEvent } from "react";
 import {
   Bar,
   BarChart,
@@ -294,6 +295,8 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
   const [run, setRun] = useState(analysis);
   const [artifact, setArtifact] = useState<StoredAnalysisResult | null>(null);
   const [error, setError] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -325,7 +328,9 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
           if (active) setArtifact(resultBody as StoredAnalysisResult);
           return;
         }
-        if (current.status !== "FAILED" && active) window.setTimeout(load, 1000);
+        if (!["FAILED", "NEEDS_CLARIFICATION"].includes(current.status) && active) {
+          window.setTimeout(load, 1000);
+        }
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : "Could not load analysis.");
       }
@@ -334,6 +339,51 @@ export function PersistedResult({ analysis }: { analysis: AnalysisRunSummary }) 
     void load();
     return () => { active = false; };
   }, [analysis.id]);
+
+  async function submitClarification(event: FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/v1/analysis-runs/${encodeURIComponent(run.id)}/clarification`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answer }),
+        },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail ?? "Could not submit clarification.");
+      setRun(body as AnalysisRunSummary);
+      setAnswer("");
+      window.location.reload();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not submit clarification.");
+      setSubmitting(false);
+    }
+  }
+
+  if (run.status === "NEEDS_CLARIFICATION") {
+    return <section className="result-cell clarification" aria-labelledby={`clarify-${run.id}`}>
+      <h3 id={`clarify-${run.id}`}>More information needed</h3>
+      <p>{run.clarification_question ?? run.error_message ?? "Please clarify your question."}</p>
+      <form onSubmit={submitClarification}>
+        <label htmlFor={`clarification-${run.id}`}>Your answer</label>
+        <textarea
+          id={`clarification-${run.id}`}
+          value={answer}
+          maxLength={4000}
+          required
+          onChange={event => setAnswer(event.target.value)}
+        />
+        <button disabled={submitting || !answer.trim()} type="submit">
+          {submitting ? "Resuming…" : "Resume analysis"}
+        </button>
+      </form>
+      {error && <p role="alert" className="error">{error}</p>}
+    </section>;
+  }
 
   if (run.status === "FAILED") {
     return <ResultCell result={{

@@ -14,9 +14,39 @@ from packages.llm_gateway.prompts import PROMPT_VERSION
 
 
 class PlanGenerationError(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, diagnostics: list[dict] | None = None):
         self.code = code
+        self.diagnostics = diagnostics or []
         super().__init__(message)
+
+
+def safe_validation_diagnostic(error: ValidationError | PlanError) -> dict:
+    """Return bounded, display-safe facts without retaining model-authored plan JSON."""
+    if isinstance(error, PlanError):
+        message = str(error)
+        if message.startswith("Unknown column: "):
+            column = message.removeprefix("Unknown column: ").strip()[:128]
+            return {"code": "UNKNOWN_COLUMN", "column": column}
+        return {"code": "UNSUPPORTED_SEMANTICS", "message": message[:300]}
+    issues = []
+    for item in error.errors(include_url=False, include_context=False)[:8]:
+        issues.append({
+            "path": ".".join(str(part) for part in item["loc"])[:200],
+            "type": str(item["type"])[:100],
+            "message": str(item["msg"])[:300],
+        })
+    return {"code": "MALFORMED_PLAN", "issues": issues}
+
+
+def missing_data_clarification(diagnostics: list[dict]) -> str | None:
+    missing = sorted({item["column"] for item in diagnostics if item["code"] == "UNKNOWN_COLUMN"})
+    if not missing:
+        return None
+    names = ", ".join(f"“{name}”" for name in missing[:4])
+    return (
+        f"This dataset does not contain the field {names}. "
+        "Which available field should be used instead, or how should it be calculated from the available fields?"
+    )
 
 
 def temporal_text_columns(profile: dict, catalog: dict[str, str]) -> set[str]:
@@ -73,12 +103,17 @@ def generate_plan(
         ) from error
     line_eligible = temporal_text_columns(version.profile_json or {}, catalog)
     request = PlanRequest(
-        question=cell.question,
+        question=(
+            cell.question
+            if not run.clarification_answer
+            else f"{cell.question}\n\nUser clarification: {run.clarification_answer}"
+        ),
         dataset_schema=version.schema_json or {},
         dataset_profile=version.profile_json or {},
         response_schema=QueryPlan.model_json_schema(),
         prompt_version=PROMPT_VERSION,
     )
+    diagnostics: list[dict] = []
     for attempt in range(2):
         try:
             response = gateway.generate_plan(cell.stable_model_id, request)
@@ -89,9 +124,19 @@ def generate_plan(
                 "MODEL_UNAVAILABLE", "The selected model could not generate a query plan."
             ) from error
         except (ValidationError, PlanError) as error:
+            diagnostics.append(safe_validation_diagnostic(error))
             if attempt == 1:
+                clarification = missing_data_clarification(diagnostics)
+                if clarification:
+                    raise PlanGenerationError(
+                        "UNANSWERABLE_WITH_DATA",
+                        clarification,
+                        diagnostics,
+                    ) from error
                 raise PlanGenerationError(
-                    "INVALID_PLAN", "The selected model could not generate a valid query plan."
+                    "INVALID_PLAN",
+                    "The selected model returned malformed or unsupported query instructions.",
+                    diagnostics,
                 ) from error
             request = request.model_copy(
                 update={
