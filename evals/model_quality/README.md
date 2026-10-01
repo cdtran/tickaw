@@ -40,11 +40,26 @@ A passing safety case establishes rejection behavior, not outcome-label accuracy
 do not weaken an expectation merely to make a model pass. Pin model and prompt versions in
 saved CI artifacts when comparing changes over time.
 
-Cases carry explicit tier tags: `full` covers all 20; `smoke` covers seven high-value
+Cases carry explicit tier tags: `full` covers all 50; `smoke` covers seven high-value
 aggregation, filtering, ranking, and missing-measure checks. Run smoke after prompt or
 planner edits with `--tier smoke`. `release` is reserved for explicitly tagged future cases;
 an empty selection fails rather than silently passing. Repeatable `--case` overrides tier
 selection.
+
+Revision `2026-09-30.3` adds 30 cases covering numeric and date boundaries,
+combined predicates, false versus null booleans, missing values, leading-zero text
+codes, multiple metrics, ranking by a specified metric, explicit charts, and absent
+region, discount, and inventory fields. These cases retain the synthetic demo schema;
+they broaden question coverage, not dataset/domain coverage. The previous 20/20 live
+result applies to revision `.2`, not this expanded corpus.
+
+New answerable contracts use `exact_metrics` and `exact_filters` to reject extra
+operations or predicates. A redundant `is_not_null` predicate on a column already
+constrained by a comparison is allowed because comparisons exclude SQL nulls.
+Ordering contracts may name a `metric` by operation and
+column, resolving its generated alias rather than requiring a particular alias spelling.
+Each new answerable case has a deterministic valid-plan fixture proving that the
+contract is representable. These fixtures verify the scorer, not live model accuracy.
 
 Reports default to `artifacts/model-quality/latest.json`; override with `--report`.
 Each record includes model/provider IDs, prompt and suite versions, attempts, token usage,
@@ -77,10 +92,11 @@ docker compose run --rm -v "$PWD/artifacts/model-quality:/eval-artifacts" api \
   --report /eval-artifacts/baseline.json --cache-dir /eval-artifacts/cache
 ```
 
-Prompt `query-plan-v2.10` includes explicit value-filter hints. The reviewed whole-word
-`book` reference maps to `Books` only when that value is sampled in the `category` column.
-This is prompt guidance; the semantic guard does not perform general singular/plural
-category matching. Refresh affected cases after changing prompts.
+Prompt `query-plan-v2.11` removes the dataset-specific category example and all
+question-to-value filter injection from `.10`. It uses generic interpretation rules
+and passes the question, schema, and profile as evidence. Temporal chart eligibility
+is derived only from schema types. Prior live scores used `.10`; they do not measure
+this generic prompt. The version change invalidates cached responses for new runs.
 
 ## Optional OpenAI route
 

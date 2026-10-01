@@ -1,199 +1,1144 @@
 {
   "suite_version": 1,
-  "revision": "2026-09-30.2",
+  "revision": "2026-09-30.3",
   "dataset": "profile_demo.json",
   "cases": [
     {
       "id": "average-books-sold-per-day",
-      "tags": ["full", "smoke"],
-      "question": "What’s the average number of books sold per day?",
+      "tags": [
+        "full",
+        "smoke"
+      ],
+      "question": "What\u2019s the average number of books sold per day?",
       "expected_outcome": "unanswerable_with_available_data",
       "expected_action": "request_clarification",
       "rationale": "No quantity or units-sold field exists. Revenue and row count are not substitutes for books sold.",
       "forbidden_metrics": [
-        {"op": "count_rows"},
-        {"op": "avg", "column": "revenue"}
+        {
+          "op": "count_rows"
+        },
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
       ]
     },
     {
       "id": "book-transaction-rows-per-day",
-      "tags": ["full", "smoke"],
+      "tags": [
+        "full",
+        "smoke"
+      ],
       "question": "Count the book transaction rows per day.",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["date"],
-      "required_metrics": [{"op": "count_rows"}],
-      "required_filters": [{"column": "category", "op": "eq", "value": "Books"}]
+      "required_dimensions": [
+        "date"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "eq",
+          "value": "Books"
+        }
+      ]
     },
     {
       "id": "average-book-revenue-per-day",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What is the average book revenue per day?",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["date"],
-      "required_metrics": [{"op": "avg", "column": "revenue"}],
-      "required_filters": [{"column": "category", "op": "eq", "value": "Books"}]
+      "required_dimensions": [
+        "date"
+      ],
+      "required_metrics": [
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "eq",
+          "value": "Books"
+        }
+      ]
     },
     {
       "id": "revenue-by-category-and-date",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "Show revenue by category and date.",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["category", "date"],
-      "required_metrics": [{"op": "sum", "column": "revenue"}]
+      "required_dimensions": [
+        "category",
+        "date"
+      ],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ]
     },
     {
       "id": "quantity-language-without-quantity",
-      "tags": ["full", "smoke"],
+      "tags": [
+        "full",
+        "smoke"
+      ],
       "question": "How many units were sold in each category?",
       "expected_outcome": "needs_clarification",
       "expected_action": "request_clarification",
       "rationale": "The dataset does not define units or quantity; counting rows silently changes the question.",
-      "forbidden_metrics": [{"op": "count_rows"}]
+      "forbidden_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ]
     },
     {
       "id": "missing-profit-field",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What was the total profit by category?",
       "expected_outcome": "unanswerable_with_available_data",
       "expected_action": "request_clarification",
       "rationale": "Profit cannot be calculated without profit or cost data.",
-      "forbidden_metrics": [{"op": "sum", "column": "revenue"}]
+      "forbidden_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ]
     },
     {
       "id": "total-revenue",
-      "tags": ["full", "smoke"],
+      "tags": [
+        "full",
+        "smoke"
+      ],
       "question": "What is the total revenue?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
-      "required_metrics": [{"op": "sum", "column": "revenue"}],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
       "required_presentation": "table"
     },
     {
       "id": "average-revenue-by-category",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What is the average recorded revenue for each category?",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["category"],
-      "required_metrics": [{"op": "avg", "column": "revenue"}]
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ]
     },
     {
       "id": "record-count-by-date",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "How many records are there per date?",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["date"],
-      "required_metrics": [{"op": "count_rows"}]
+      "required_dimensions": [
+        "date"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ]
     },
     {
       "id": "non-null-revenue-by-category",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "Count the non-null revenue values by category.",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["category"],
-      "required_metrics": [{"op": "count_non_null", "column": "revenue"}]
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_non_null",
+          "column": "revenue"
+        }
+      ]
     },
     {
       "id": "missing-revenue-rows",
-      "tags": ["full", "smoke"],
+      "tags": [
+        "full",
+        "smoke"
+      ],
       "question": "Count rows with missing revenue by category.",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["category"],
-      "required_metrics": [{"op": "count_rows"}],
-      "required_filters": [{"column": "revenue", "op": "is_null"}]
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "is_null"
+        }
+      ]
     },
     {
       "id": "active-records-by-category",
-      "tags": ["full", "smoke"],
+      "tags": [
+        "full",
+        "smoke"
+      ],
       "question": "How many active records are in each category?",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["category"],
-      "required_metrics": [{"op": "count_rows"}],
-      "required_filters": [{"column": "active", "op": "eq", "value": true}]
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "active",
+          "op": "eq",
+          "value": true
+        }
+      ]
     },
     {
       "id": "books-total-revenue",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What is the total revenue for Books?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
-      "required_metrics": [{"op": "sum", "column": "revenue"}],
-      "required_filters": [{"column": "category", "op": "eq", "value": "Books"}]
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "eq",
+          "value": "Books"
+        }
+      ]
     },
     {
       "id": "games-average-revenue",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What is the average revenue for Games?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
-      "required_metrics": [{"op": "avg", "column": "revenue"}],
-      "required_filters": [{"column": "category", "op": "eq", "value": "Games"}]
+      "required_metrics": [
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "eq",
+          "value": "Games"
+        }
+      ]
     },
     {
       "id": "highest-revenue-category",
-      "tags": ["full", "smoke"],
+      "tags": [
+        "full",
+        "smoke"
+      ],
       "question": "Which category has the highest total revenue?",
       "expected_outcome": "valid_plan",
-      "required_dimensions": ["category"],
-      "required_metrics": [{"op": "sum", "column": "revenue"}],
-      "required_order_by": [{"direction": "desc"}],
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_order_by": [
+        {
+          "direction": "desc"
+        }
+      ],
       "required_limit": 1
     },
     {
       "id": "earliest-recorded-date",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What is the earliest recorded date?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
-      "required_metrics": [{"op": "min", "column": "date"}],
+      "required_metrics": [
+        {
+          "op": "min",
+          "column": "date"
+        }
+      ],
       "required_presentation": "table"
     },
     {
       "id": "best-selling-category-without-quantity",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "Which category sold the most products?",
       "expected_outcome": "needs_clarification",
       "expected_action": "request_clarification",
       "rationale": "Neither row count nor revenue establishes how many products were sold.",
       "forbidden_metrics": [
-        {"op": "count_rows"},
-        {"op": "sum", "column": "revenue"}
+        {
+          "op": "count_rows"
+        },
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
       ]
     },
     {
       "id": "unique-customers-without-customer",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "How many unique customers purchased books?",
       "expected_outcome": "unanswerable_with_available_data",
       "expected_action": "request_clarification",
       "rationale": "There is no customer identifier and query-plan v2 has no distinct-count operation.",
-      "forbidden_metrics": [{"op": "count_rows"}]
+      "forbidden_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ]
     },
     {
       "id": "average-price-without-price",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What was the average price by category?",
       "expected_outcome": "needs_clarification",
       "expected_action": "request_clarification",
       "rationale": "Revenue is not necessarily unit price and no price field exists.",
-      "forbidden_metrics": [{"op": "avg", "column": "revenue"}]
+      "forbidden_metrics": [
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ]
     },
     {
       "id": "profit-margin-without-cost",
-      "tags": ["full"],
+      "tags": [
+        "full"
+      ],
       "question": "What is the profit margin for Books?",
       "expected_outcome": "unanswerable_with_available_data",
       "expected_action": "request_clarification",
       "rationale": "Profit margin requires cost or profit data, neither of which is available.",
       "forbidden_metrics": [
-        {"op": "sum", "column": "revenue"},
-        {"op": "avg", "column": "revenue"}
+        {
+          "op": "sum",
+          "column": "revenue"
+        },
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ]
+    },
+    {
+      "id": "revenue-strictly-above-120",
+      "tags": [
+        "full"
+      ],
+      "question": "Total revenue from rows whose revenue is strictly greater than 120.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "gt",
+          "value": 120
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "revenue-at-least-120",
+      "tags": [
+        "full"
+      ],
+      "question": "Total revenue from rows whose revenue is at least 120.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "gte",
+          "value": 120
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "revenue-strictly-below-180",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows whose revenue is strictly less than 180.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "lt",
+          "value": 180
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "revenue-at-most-180",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows whose revenue is at most 180.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "lte",
+          "value": 180
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "revenue-inclusive-range",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows with revenue between 120 and 180, including both endpoints.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "gte",
+          "value": 120
+        },
+        {
+          "column": "revenue",
+          "op": "lte",
+          "value": 180
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "zero-revenue-rows",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows where revenue equals zero.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "eq",
+          "value": 0
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "negative-revenue-rows",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows with negative revenue.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "lt",
+          "value": 0
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "exclude-books",
+      "tags": [
+        "full"
+      ],
+      "question": "Total revenue excluding rows where category equals Books.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "ne",
+          "value": "Books"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "inactive-rows",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows where active is false, grouped by category. Do not include null active values.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "active",
+          "op": "eq",
+          "value": false
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "unknown-active-rows",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows where active is null.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "active",
+          "op": "is_null"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "known-revenue-rows",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows where revenue is not null.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "revenue",
+          "op": "is_not_null"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "missing-category-rows",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows where category is null.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "is_null"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "present-code-count",
+      "tags": [
+        "full"
+      ],
+      "question": "Count non-null code values per category.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_non_null",
+          "column": "code"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "leading-zero-code",
+      "tags": [
+        "full"
+      ],
+      "question": "Total revenue for code exactly \"001\". Preserve the leading zeros.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "code",
+          "op": "eq",
+          "value": "001"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "date-exact",
+      "tags": [
+        "full"
+      ],
+      "question": "Total revenue on January 2, 2026.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "date",
+          "op": "eq",
+          "value": "2026-01-02"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "date-before",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows dated strictly before January 2, 2026.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "date",
+          "op": "lt",
+          "value": "2026-01-02"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "date-after",
+      "tags": [
+        "full"
+      ],
+      "question": "Count rows dated strictly after January 2, 2026.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "date",
+          "op": "gt",
+          "value": "2026-01-02"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "date-inclusive-range",
+      "tags": [
+        "full"
+      ],
+      "question": "Total revenue from January 1 through January 3, 2026, inclusive.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "date",
+          "op": "gte",
+          "value": "2026-01-01"
+        },
+        {
+          "column": "date",
+          "op": "lte",
+          "value": "2026-01-03"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "books-high-revenue",
+      "tags": [
+        "full"
+      ],
+      "question": "Count Books rows with revenue greater than 120.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "eq",
+          "value": "Books"
+        },
+        {
+          "column": "revenue",
+          "op": "gt",
+          "value": 120
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "inactive-games-known-revenue",
+      "tags": [
+        "full"
+      ],
+      "question": "Count Games rows where active is false and revenue is not null.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        }
+      ],
+      "required_filters": [
+        {
+          "column": "category",
+          "op": "eq",
+          "value": "Games"
+        },
+        {
+          "column": "active",
+          "op": "eq",
+          "value": false
+        },
+        {
+          "column": "revenue",
+          "op": "is_not_null"
+        }
+      ],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "revenue-summary",
+      "tags": [
+        "full"
+      ],
+      "question": "Show total, average, minimum, and maximum revenue in one table.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        },
+        {
+          "op": "avg",
+          "column": "revenue"
+        },
+        {
+          "op": "min",
+          "column": "revenue"
+        },
+        {
+          "op": "max",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true,
+      "required_presentation": "table"
+    },
+    {
+      "id": "rows-and-known-revenue",
+      "tags": [
+        "full"
+      ],
+      "question": "Show row count and non-null revenue count by category.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "count_rows"
+        },
+        {
+          "op": "count_non_null",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true
+    },
+    {
+      "id": "latest-date",
+      "tags": [
+        "full"
+      ],
+      "question": "What is the latest recorded date?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [],
+      "required_metrics": [
+        {
+          "op": "max",
+          "column": "date"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true,
+      "required_presentation": "table"
+    },
+    {
+      "id": "lowest-revenue-category",
+      "tags": [
+        "full"
+      ],
+      "question": "Which category has the lowest total revenue?",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true,
+      "required_order_by": [
+        {
+          "metric": {
+            "op": "sum",
+            "column": "revenue"
+          },
+          "direction": "asc"
+        }
+      ],
+      "required_limit": 1
+    },
+    {
+      "id": "top-two-average-revenue",
+      "tags": [
+        "full"
+      ],
+      "question": "Show the two categories with the highest average revenue, along with their total revenue. Sort by average revenue descending.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "avg",
+          "column": "revenue"
+        },
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true,
+      "required_order_by": [
+        {
+          "metric": {
+            "op": "avg",
+            "column": "revenue"
+          },
+          "direction": "desc"
+        }
+      ],
+      "required_limit": 2
+    },
+    {
+      "id": "revenue-line-chart",
+      "tags": [
+        "full"
+      ],
+      "question": "Plot total revenue by date as a line chart, sorted by date ascending.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "date"
+      ],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true,
+      "required_order_by": [
+        {
+          "field": "date",
+          "direction": "asc"
+        }
+      ],
+      "required_presentation": "line"
+    },
+    {
+      "id": "category-bar-chart",
+      "tags": [
+        "full"
+      ],
+      "question": "Show total revenue by category as a bar chart.",
+      "expected_outcome": "valid_plan",
+      "required_dimensions": [
+        "category"
+      ],
+      "required_metrics": [
+        {
+          "op": "sum",
+          "column": "revenue"
+        }
+      ],
+      "required_filters": [],
+      "exact_metrics": true,
+      "exact_filters": true,
+      "required_presentation": "bar"
+    },
+    {
+      "id": "missing-region",
+      "tags": [
+        "full"
+      ],
+      "question": "Show total revenue by region.",
+      "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
+      "rationale": "No region field exists; category is not a geographic substitute.",
+      "forbidden_metrics": [
+        {
+          "op": "count_rows"
+        },
+        {
+          "op": "sum",
+          "column": "revenue"
+        },
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ]
+    },
+    {
+      "id": "missing-discount",
+      "tags": [
+        "full"
+      ],
+      "question": "What is the average discount?",
+      "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
+      "rationale": "No discount field exists; revenue is not a discount.",
+      "forbidden_metrics": [
+        {
+          "op": "count_rows"
+        },
+        {
+          "op": "sum",
+          "column": "revenue"
+        },
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
+      ]
+    },
+    {
+      "id": "missing-inventory",
+      "tags": [
+        "full"
+      ],
+      "question": "How much inventory is left in each category?",
+      "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
+      "rationale": "No inventory field exists; row count does not establish stock.",
+      "forbidden_metrics": [
+        {
+          "op": "count_rows"
+        },
+        {
+          "op": "sum",
+          "column": "revenue"
+        },
+        {
+          "op": "avg",
+          "column": "revenue"
+        }
       ]
     }
   ],
   "classification_fixtures": [
     {
       "id": "malformed-model-output",
-      "payload": {"plan_version": 2, "dimensions": ["date"]},
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "date"
+        ]
+      },
       "expected_outcome": "invalid_model_output"
     },
     {
@@ -201,14 +1146,798 @@
       "case_id": "average-books-sold-per-day",
       "payload": {
         "plan_version": 2,
-        "dimensions": ["date"],
-        "metrics": [{"op": "count_rows", "alias": "books_sold"}],
-        "filters": [{"column": "category", "op": "eq", "value": "Books"}],
+        "dimensions": [
+          "date"
+        ],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "books_sold"
+          }
+        ],
+        "filters": [
+          {
+            "column": "category",
+            "op": "eq",
+            "value": "Books"
+          }
+        ],
         "order_by": [],
         "limit": 100,
-        "presentation": {"type": "line"}
+        "presentation": {
+          "type": "line"
+        }
       },
       "expected_outcome": "semantically_misleading_substitution"
+    },
+    {
+      "id": "contract-revenue-strictly-above-120",
+      "case_id": "revenue-strictly-above-120",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "gt",
+            "value": 120
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-revenue-at-least-120",
+      "case_id": "revenue-at-least-120",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "gte",
+            "value": 120
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-revenue-strictly-below-180",
+      "case_id": "revenue-strictly-below-180",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "lt",
+            "value": 180
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-revenue-at-most-180",
+      "case_id": "revenue-at-most-180",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "lte",
+            "value": 180
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-revenue-inclusive-range",
+      "case_id": "revenue-inclusive-range",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "gte",
+            "value": 120
+          },
+          {
+            "column": "revenue",
+            "op": "lte",
+            "value": 180
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-zero-revenue-rows",
+      "case_id": "zero-revenue-rows",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "eq",
+            "value": 0
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-negative-revenue-rows",
+      "case_id": "negative-revenue-rows",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "lt",
+            "value": 0
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-exclude-books",
+      "case_id": "exclude-books",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "category",
+            "op": "ne",
+            "value": "Books"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-inactive-rows",
+      "case_id": "inactive-rows",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "category"
+        ],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "active",
+            "op": "eq",
+            "value": false
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-unknown-active-rows",
+      "case_id": "unknown-active-rows",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "active",
+            "op": "is_null"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-known-revenue-rows",
+      "case_id": "known-revenue-rows",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "revenue",
+            "op": "is_not_null"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-missing-category-rows",
+      "case_id": "missing-category-rows",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "category",
+            "op": "is_null"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-present-code-count",
+      "case_id": "present-code-count",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "category"
+        ],
+        "metrics": [
+          {
+            "op": "count_non_null",
+            "column": "code",
+            "alias": "m0"
+          }
+        ],
+        "filters": [],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-leading-zero-code",
+      "case_id": "leading-zero-code",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "code",
+            "op": "eq",
+            "value": "001"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-date-exact",
+      "case_id": "date-exact",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "date",
+            "op": "eq",
+            "value": "2026-01-02"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-date-before",
+      "case_id": "date-before",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "date",
+            "op": "lt",
+            "value": "2026-01-02"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-date-after",
+      "case_id": "date-after",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "date",
+            "op": "gt",
+            "value": "2026-01-02"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-date-inclusive-range",
+      "case_id": "date-inclusive-range",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "date",
+            "op": "gte",
+            "value": "2026-01-01"
+          },
+          {
+            "column": "date",
+            "op": "lte",
+            "value": "2026-01-03"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-books-high-revenue",
+      "case_id": "books-high-revenue",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "category",
+            "op": "eq",
+            "value": "Books"
+          },
+          {
+            "column": "revenue",
+            "op": "gt",
+            "value": 120
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-inactive-games-known-revenue",
+      "case_id": "inactive-games-known-revenue",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          }
+        ],
+        "filters": [
+          {
+            "column": "category",
+            "op": "eq",
+            "value": "Games"
+          },
+          {
+            "column": "active",
+            "op": "eq",
+            "value": false
+          },
+          {
+            "column": "revenue",
+            "op": "is_not_null"
+          }
+        ],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-revenue-summary",
+      "case_id": "revenue-summary",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          },
+          {
+            "op": "avg",
+            "column": "revenue",
+            "alias": "m1"
+          },
+          {
+            "op": "min",
+            "column": "revenue",
+            "alias": "m2"
+          },
+          {
+            "op": "max",
+            "column": "revenue",
+            "alias": "m3"
+          }
+        ],
+        "filters": [],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-rows-and-known-revenue",
+      "case_id": "rows-and-known-revenue",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "category"
+        ],
+        "metrics": [
+          {
+            "op": "count_rows",
+            "alias": "m0"
+          },
+          {
+            "op": "count_non_null",
+            "column": "revenue",
+            "alias": "m1"
+          }
+        ],
+        "filters": [],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-latest-date",
+      "case_id": "latest-date",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [],
+        "metrics": [
+          {
+            "op": "max",
+            "column": "date",
+            "alias": "m0"
+          }
+        ],
+        "filters": [],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-lowest-revenue-category",
+      "case_id": "lowest-revenue-category",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "category"
+        ],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [],
+        "order_by": [
+          {
+            "field": "m0",
+            "direction": "asc"
+          }
+        ],
+        "limit": 1,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-top-two-average-revenue",
+      "case_id": "top-two-average-revenue",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "category"
+        ],
+        "metrics": [
+          {
+            "op": "avg",
+            "column": "revenue",
+            "alias": "m0"
+          },
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m1"
+          }
+        ],
+        "filters": [],
+        "order_by": [
+          {
+            "field": "m0",
+            "direction": "desc"
+          }
+        ],
+        "limit": 2,
+        "presentation": {
+          "type": "table"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-revenue-line-chart",
+      "case_id": "revenue-line-chart",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "date"
+        ],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [],
+        "order_by": [
+          {
+            "field": "date",
+            "direction": "asc"
+          }
+        ],
+        "limit": 100,
+        "presentation": {
+          "type": "line"
+        }
+      },
+      "expected_outcome": "valid_plan"
+    },
+    {
+      "id": "contract-category-bar-chart",
+      "case_id": "category-bar-chart",
+      "payload": {
+        "plan_version": 2,
+        "dimensions": [
+          "category"
+        ],
+        "metrics": [
+          {
+            "op": "sum",
+            "column": "revenue",
+            "alias": "m0"
+          }
+        ],
+        "filters": [],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {
+          "type": "bar"
+        }
+      },
+      "expected_outcome": "valid_plan"
     }
   ]
 }

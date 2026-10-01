@@ -327,25 +327,64 @@ def test_safety_action_report_does_not_claim_outcome_label_accuracy(tmp_path, mo
     )
 
 
-def test_book_prompt_hint_is_narrow_and_preserves_sample_spelling():
+def test_prompt_passes_dataset_evidence_without_inventing_value_constraints():
     import json
 
     from packages.llm_gateway.contracts import PlanRequest
-    from packages.llm_gateway.prompts import user_prompt
+    from packages.llm_gateway.prompts import system_prompt, user_prompt
 
-    _, dataset = load_suite()
-    for question, expected in [
-        ("Count the book transaction rows per day.", True),
-        ("What is the average book revenue per day?", True),
-        ("What is the total revenue?", False),
-        ("Count notebook transaction rows per day.", False),
-    ]:
+    schema = {"columns": [{"name": "department", "inferred_type": "string"}]}
+    profile = {"columns": [{"name": "department", "sample_values": ["Hardware"]}]}
+    for question in ["Total by department", "Exclude Hardware", "Count hardware records"]:
         request = PlanRequest(
-            question=question,
-            dataset_schema=dataset["schema"],
-            dataset_profile=dataset["profile"],
-            response_schema={},
-            prompt_version="test",
+            question=question, dataset_schema=schema, dataset_profile=profile,
+            response_schema={}, prompt_version="test",
         )
-        filters = json.loads(user_prompt(request))["planning_constraints"]["required_value_filters"]
-        assert ({"column": "category", "op": "eq", "value": "Books"} in filters) == expected
+        context = json.loads(user_prompt(request))
+        assert context["question"] == question
+        assert context["dataset_schema"] == schema
+        assert context["dataset_profile"] == profile
+        assert set(context["planning_constraints"]) == {"line_chart_eligible_columns"}
+    assert "Books" not in system_prompt()
+    assert "total_revenue" not in system_prompt()
+
+
+def test_broader_contracts_reject_extra_filters_and_wrong_rank_metric():
+    from copy import deepcopy
+
+    suite, dataset = load_suite()
+    catalog = catalog_for(dataset)
+    fixtures = {item.get('case_id'): item for item in suite['classification_fixtures']}
+    case = case_by_id(suite, 'revenue-at-least-120')
+    payload = deepcopy(fixtures[case['id']]['payload'])
+    payload['filters'].append({'column': 'category', 'op': 'eq', 'value': 'Books'})
+    assert score_payload(case, payload, catalog).outcome == 'semantically_misleading_substitution'
+
+    case = case_by_id(suite, 'top-two-average-revenue')
+    payload = deepcopy(fixtures[case['id']]['payload'])
+    payload['order_by'][0]['field'] = payload['metrics'][1]['alias']
+    assert score_payload(case, payload, catalog).outcome == 'semantically_misleading_substitution'
+
+
+def test_boundary_contracts_reject_exclusive_instead_of_inclusive_filter():
+    from copy import deepcopy
+
+    suite, dataset = load_suite()
+    case = case_by_id(suite, 'revenue-at-least-120')
+    fixture = next(f for f in suite['classification_fixtures'] if f.get('case_id') == case['id'])
+    payload = deepcopy(fixture['payload'])
+    payload['filters'][0]['op'] = 'gt'
+    assert score_payload(case, payload, catalog_for(dataset)).outcome == 'semantically_misleading_substitution'
+
+
+def test_redundant_non_null_check_does_not_fail_exact_filter_contract():
+    from copy import deepcopy
+
+    suite, dataset = load_suite()
+    case = case_by_id(suite, 'inactive-rows')
+    fixture = next(f for f in suite['classification_fixtures'] if f.get('case_id') == case['id'])
+    payload = deepcopy(fixture['payload'])
+    payload['filters'].append({'column': 'active', 'op': 'is_not_null'})
+    assert score_payload(case, payload, catalog_for(dataset)).outcome == 'valid_plan'
+    payload['filters'].append({'column': 'revenue', 'op': 'is_not_null'})
+    assert score_payload(case, payload, catalog_for(dataset)).outcome == 'semantically_misleading_substitution'

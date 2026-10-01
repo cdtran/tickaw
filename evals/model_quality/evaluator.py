@@ -91,8 +91,29 @@ def score_payload(case: dict[str, Any], payload: dict[str, Any], catalog: dict[s
     for expected in case.get("required_filters", []):
         if not _contains(serialized["filters"], expected):
             reasons.append(f"missing required filter {expected!r}")
+    for field, flag in [("metrics", "exact_metrics"), ("filters", "exact_filters")]:
+        items = serialized[field]
+        if field == "filters":
+            # Comparisons already exclude SQL nulls; an explicit non-null check
+            # on the same column does not narrow the result further.
+            compared = {item["column"] for item in items if "value" in item}
+            required = case.get("required_filters", [])
+            items = [item for item in items if not (
+                item["op"] == "is_not_null" and item["column"] in compared
+                and not _contains(required, item)
+            )]
+        if case.get(flag) and len(items) != len(case.get(f"required_{field}", [])):
+            reasons.append(f"unexpected number of {field}")
     for expected in case.get("required_order_by", []):
-        if not _contains(serialized["order_by"], expected):
+        ordering = {key: value for key, value in expected.items() if key != "metric"}
+        matches = serialized["order_by"]
+        if "metric" in expected:
+            aliases = {
+                metric["alias"] for metric in serialized["metrics"]
+                if all(metric.get(key) == value for key, value in expected["metric"].items())
+            }
+            matches = [item for item in matches if item["field"] in aliases]
+        if not _contains(matches, ordering):
             reasons.append(f"missing required ordering {expected!r}")
     if "required_limit" in case and serialized["limit"] != case["required_limit"]:
         reasons.append(f"limit was {serialized['limit']!r}, expected {case['required_limit']!r}")
