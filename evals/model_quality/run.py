@@ -19,8 +19,10 @@ from evals.model_quality.evaluator import EvaluationResult, catalog_for, load_su
 from evals.model_quality.recording import RecordingGateway
 from packages.data_engine.query_plan import PlanError, QueryPlan, validate_plan
 from packages.data_engine.question_semantics import check_question_meaning
+from packages.llm_gateway.adapters.openai import OpenAIAdapter, PaidRunBlocked
 from packages.llm_gateway.adapters.openai_compatible import ModelProviderError
 from packages.llm_gateway.contracts import PlanRequest
+from packages.llm_gateway.gateway import LLMGateway
 from packages.llm_gateway.prompts import PROMPT_VERSION
 
 
@@ -36,6 +38,8 @@ def evaluate_case(gateway, model_id, case, dataset, catalog) -> EvaluationResult
     for attempt in range(2):
         try:
             response = gateway.generate_plan(model_id, request)
+        except PaidRunBlocked:
+            return EvaluationResult("paid_run_blocked", ("PAID_RUN_BLOCKED",))
         except ModelProviderError:
             return EvaluationResult("provider_runtime_failure", ("PROVIDER_ERROR",))
         try:
@@ -88,11 +92,26 @@ def run(
     refresh=False,
     input_rate: float | None = None,
     output_rate: float | None = None,
+    allow_paid: bool = False,
+    max_cost_usd: float | None = None,
+    max_requests: int | None = None,
+    max_output_tokens: int = 1024,
 ) -> int:
     suite, dataset = load_suite(suite_path)
     gateway = get_llm_gateway()
     catalog = catalog_for(dataset)
     route = gateway.registry.resolve(model_id)
+    paid_adapter = None
+    if route.provider == "openai":
+        paid_adapter = OpenAIAdapter(
+            allow_paid=allow_paid,
+            max_cost_usd=max_cost_usd,
+            max_requests=max_requests,
+            input_rate=input_rate,
+            output_rate=output_rate,
+            max_output_tokens=max_output_tokens,
+        )
+        gateway = LLMGateway(gateway.registry, gateway.adapters | {"openai": paid_adapter})
     unknown = (case_ids or set()) - {case["id"] for case in suite["cases"]}
     if unknown:
         raise ValueError(f"Unknown evaluation case ids: {', '.join(sorted(unknown))}")
@@ -143,7 +162,9 @@ def run(
             "failure_category": None
             if passed
             else (
-                "provider_runtime_failure"
+                "paid_run_blocked"
+                if result.outcome == "paid_run_blocked"
+                else "provider_runtime_failure"
                 if result.outcome == "provider_runtime_failure"
                 else "model_failure"
             ),
@@ -169,6 +190,16 @@ def run(
         "failures": failures,
         "created_at": datetime.now(UTC).isoformat(),
         "tier": tier,
+        "paid_run": None
+        if paid_adapter is None
+        else {
+            "allowed": allow_paid,
+            "generation_requests": paid_adapter.requests,
+            "reserved_cost_usd": float(paid_adapter.reserved_cost),
+            "max_cost_usd": max_cost_usd,
+            "max_requests": max_requests,
+            "max_output_tokens": max_output_tokens,
+        },
     }
     if report_path:
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -193,6 +224,10 @@ def main() -> None:
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--input-rate", type=float, help="USD per million input tokens")
     parser.add_argument("--output-rate", type=float, help="USD per million output tokens")
+    parser.add_argument("--allow-paid", action="store_true", help="Opt in to paid generation")
+    parser.add_argument("--max-cost-usd", type=float, help="Per-run reservation budget")
+    parser.add_argument("--max-requests", type=int, help="Paid generations including corrections")
+    parser.add_argument("--max-output-tokens", type=int, default=1024)
     args = parser.parse_args()
     if any(rate is not None and rate < 0 for rate in [args.input_rate, args.output_rate]):
         parser.error("Token prices cannot be negative")
@@ -208,6 +243,10 @@ def main() -> None:
             refresh=args.refresh,
             input_rate=args.input_rate,
             output_rate=args.output_rate,
+            allow_paid=args.allow_paid,
+            max_cost_usd=args.max_cost_usd,
+            max_requests=args.max_requests,
+            max_output_tokens=args.max_output_tokens,
         )
     )
 

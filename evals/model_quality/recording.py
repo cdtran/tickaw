@@ -37,8 +37,13 @@ class RecordingGateway:
             "provider": route.provider,
             "endpoint": route.base_url,
             "parameters": {
-                "temperature": 0,
-                "max_output_tokens": 1024,
+                "temperature": None if route.provider == "openai" else 0,
+                "max_output_tokens": (
+                    self.gateway.adapters["openai"].max_output_tokens
+                    if route.provider == "openai"
+                    else 1024
+                ),
+                "openai_schema_version": 1 if route.provider == "openai" else None,
                 "think": False if route.provider == "ollama" else None,
             },
         }

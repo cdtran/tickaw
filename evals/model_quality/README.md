@@ -67,7 +67,7 @@ refresh after a model-server update.
 Token counts include cached response usage; cache hits are reported separately. Missing
 usage remains null. Optional `--input-rate` and `--output-rate` specify USD per million tokens
 for an estimated response cost (including cached responses), not an invoice or fresh-run
-spend. Unknown prices remain null. No paid providers are currently configured.
+spend. Unknown prices remain null. The optional OpenAI route below requires explicit prices.
 
 Persist Docker artifacts on the host:
 
@@ -81,3 +81,41 @@ Prompt `query-plan-v2.10` includes explicit value-filter hints. The reviewed who
 `book` reference maps to `Books` only when that value is sampled in the `category` column.
 This is prompt guidance; the semantic guard does not perform general singular/plural
 category matching. Refresh affected cases after changing prompts.
+
+## Optional OpenAI route
+
+Set `OPENAI_MODEL` to an explicit Responses API model ID, set `OPENAI_API_KEY`, and
+add `openai-analysis` to `LLM_ENABLED_MODELS`. Qwen remains the default. No model or
+price is guessed. Check current prices for your model before supplying rates.
+
+Evaluations require per-invocation opt-in, even if `OPENAI_ALLOW_PAID` is enabled for
+application workers. For example, with your reviewed rates in shell variables:
+
+```sh
+docker compose run --rm api python -m evals.model_quality.run \
+  --model openai-analysis --case total-revenue --allow-paid \
+  --max-cost-usd 0.10 --max-requests 2 --max-output-tokens 1024 \
+  --input-rate "$INPUT_USD_PER_MILLION" --output-rate "$OUTPUT_USD_PER_MILLION"
+```
+
+Without opt-in, valid cache hits can still be scored; cache misses report
+`paid_run_blocked` without contacting OpenAI. Corrections consume the same request
+and dollar limits. The adapter counts input tokens with the official token-count
+endpoint, then reserves input cost plus the full output-token allowance before
+sending generation. It sends no automatic retries, uses `store: false`, and rejects
+refused, incomplete, or malformed responses. Query plans still pass all existing
+structural and semantic checks. Discriminated unions are translated to `anyOf` in
+the provider schema without weakening local validation.
+
+The summary's `paid_run` reports generation requests and reserved cost separately
+from cached response cost. Reservations are retained after success and errors,
+including timeouts, because a failed request may have incurred a charge. These
+are conservative controls at **your supplied prices**, not invoice reconciliation.
+They apply to one evaluation run or one application process, reset on restart, and
+are not a shared account limit across workers. For application use, explicitly set
+`OPENAI_ALLOW_PAID=true`, the budget, request cap, and both rates; exhausted limits
+require a new process. Keep paid application use disabled unless that scope is
+appropriate. Token-count failures block generation.
+
+API contracts: [Responses](https://developers.openai.com/api/reference/python/resources/responses/methods/create)
+and [token counting](https://developers.openai.com/api/docs/guides/token-counting).
