@@ -43,3 +43,19 @@ The targeted case passed using one cache hit and one fresh Qwen request (prompt 
 unchanged). Metadata is saved locally in `artifacts/model-quality/active-guard.json`.
 This demonstrates correction for the observed failure; the original 17/20 baseline above
 remains the historical reference, and no new full-suite pass rate is claimed.
+
+## Follow-up: Books filters and independent safety actions
+
+A prose-only prompt (`query-plan-v2.9`) still missed both Books filters in fresh targeted
+responses. Prompt `query-plan-v2.10` adds explicit value-filter hints, including the narrow
+whole-word `book` to sampled `category = Books` mapping. Both Books regressions then passed
+on the first attempt. No semantic category-matching rule was added.
+
+Five fresh targeted cases passed: both Books regressions, average books sold, quantity
+language without quantity, and total revenue. The two missing-measure cases asserted the
+observed `request_clarification` action and reported `safe_rejection` with a null
+`outcome_label_match`; they did not establish clarification versus unanswerable accuracy.
+The safety action contract is now separate from the preserved expected outcome labels.
+Metadata is saved locally in `artifacts/model-quality/books-safety-v2.10.json`.
+All 164 Python unit tests passed. The historical full baseline remains 17/20; this targeted
+five-case run does not establish a new full-suite rate.

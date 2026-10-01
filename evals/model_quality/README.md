@@ -30,8 +30,13 @@ docker compose run --rm api python -m evals.model_quality.run \
   --case revenue-by-category-and-date
 ```
 
-The runner emits one JSON line per case and exits nonzero if actual outcomes differ from the
-reviewed expectations. A live failure is a regression signal or a known gap to investigate;
+The runner emits one JSON line per case and exits nonzero if the observed outcome or action
+fails the reviewed contract. Missing-measure and semantic safety rejections report
+`actual: safe_rejection` and `observed_action: request_clarification`, independently of the
+expected outcome label. Safety cases explicitly specify `expected_action`; their pass status
+checks that action and `scoring_basis` is `action`. `outcome_label_match` is null for safety
+rejections because clarification versus unanswerable is not independently predicted.
+A passing safety case establishes rejection behavior, not outcome-label accuracy. A live failure is a regression signal or a known gap to investigate;
 do not weaken an expectation merely to make a model pass. Pin model and prompt versions in
 saved CI artifacts when comparing changes over time.
 
@@ -71,3 +76,8 @@ docker compose run --rm -v "$PWD/artifacts/model-quality:/eval-artifacts" api \
   python -m evals.model_quality.run --model qwen-local --tier full --refresh \
   --report /eval-artifacts/baseline.json --cache-dir /eval-artifacts/cache
 ```
+
+Prompt `query-plan-v2.10` includes explicit value-filter hints. The reviewed whole-word
+`book` reference maps to `Books` only when that value is sampled in the `category` column.
+This is prompt guidance; the semantic guard does not perform general singular/plural
+category matching. Refresh affected cases after changing prompts.

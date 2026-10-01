@@ -26,6 +26,7 @@ OUTCOMES = {
 class EvaluationResult:
     outcome: str
     reasons: tuple[str, ...] = ()
+    observed_action: str | None = None
 
 
 def load_suite(path: Path = SUITE_DIR / "cases.json") -> tuple[dict[str, Any], dict[str, Any]]:
@@ -56,6 +57,8 @@ def validate_suite(suite: dict[str, Any], dataset: dict[str, Any]) -> None:
             raise ValueError(f"Case {case['id']} must have a question")
         if case.get("expected_outcome") not in OUTCOMES:
             raise ValueError(f"Case {case['id']} has an unsupported expected outcome")
+        if case.get("expected_action") not in {None, "request_clarification"}:
+            raise ValueError(f"Case {case['id']} has an unsupported expected action")
     for fixture in suite.get("classification_fixtures", []):
         if fixture.get("expected_outcome") not in OUTCOMES:
             raise ValueError(f"Fixture {fixture.get('id')} has an unsupported expected outcome")

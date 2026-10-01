@@ -58,23 +58,21 @@ def evaluate_case(gateway, model_id, case, dataset, catalog) -> EvaluationResult
                 )
                 continue
             if missing_data_clarification(diagnostics, case["question"], catalog):
-                outcome = (
-                    "unanswerable_with_available_data"
-                    if case["expected_outcome"] == "unanswerable_with_available_data"
-                    else "needs_clarification"
+                return EvaluationResult(
+                    "safe_rejection",
+                    tuple(item["code"] for item in diagnostics),
+                    observed_action="request_clarification",
                 )
-                return EvaluationResult(outcome, tuple(item["code"] for item in diagnostics))
             return EvaluationResult(
                 "invalid_model_output", tuple(item["code"] for item in diagnostics)
             )
         meaning_issue = check_question_meaning(case["question"], plan, catalog)
         if meaning_issue:
-            outcome = (
-                "unanswerable_with_available_data"
-                if case["expected_outcome"] == "unanswerable_with_available_data"
-                else "needs_clarification"
+            return EvaluationResult(
+                "safe_rejection",
+                (meaning_issue.code,),
+                observed_action="request_clarification",
             )
-            return EvaluationResult(outcome, (meaning_issue.code,))
         return score_payload(case, response.payload, catalog)
     raise AssertionError("evaluation attempts exhausted")
 
@@ -110,7 +108,17 @@ def run(
     for case in cases:
         recorder = RecordingGateway(gateway, case, dataset, cache_dir, refresh)
         result = evaluate_case(recorder, model_id, case, dataset, catalog)
-        passed = result.outcome == case["expected_outcome"]
+        expected_action = case.get("expected_action")
+        outcome_label_match = (
+            None
+            if result.outcome == "safe_rejection"
+            else result.outcome == case["expected_outcome"]
+        )
+        passed = (
+            result.observed_action == expected_action
+            if expected_action
+            else outcome_label_match is True
+        )
         failures += not passed
         input_tokens = recorder.tokens(recorder.input_tokens)
         output_tokens = recorder.tokens(recorder.output_tokens)
@@ -127,6 +135,10 @@ def run(
             "passed": passed,
             "expected": case["expected_outcome"],
             "actual": result.outcome,
+            "observed_action": result.observed_action,
+            "expected_action": expected_action,
+            "outcome_label_match": outcome_label_match,
+            "scoring_basis": "action" if expected_action else "outcome",
             "reasons": result.reasons,
             "failure_category": None
             if passed

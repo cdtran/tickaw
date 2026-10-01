@@ -1,6 +1,6 @@
 {
   "suite_version": 1,
-  "revision": "2026-09-30.1",
+  "revision": "2026-09-30.2",
   "dataset": "profile_demo.json",
   "cases": [
     {
@@ -8,6 +8,7 @@
       "tags": ["full", "smoke"],
       "question": "What’s the average number of books sold per day?",
       "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
       "rationale": "No quantity or units-sold field exists. Revenue and row count are not substitutes for books sold.",
       "forbidden_metrics": [
         {"op": "count_rows"},
@@ -45,6 +46,7 @@
       "tags": ["full", "smoke"],
       "question": "How many units were sold in each category?",
       "expected_outcome": "needs_clarification",
+      "expected_action": "request_clarification",
       "rationale": "The dataset does not define units or quantity; counting rows silently changes the question.",
       "forbidden_metrics": [{"op": "count_rows"}]
     },
@@ -53,6 +55,7 @@
       "tags": ["full"],
       "question": "What was the total profit by category?",
       "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
       "rationale": "Profit cannot be calculated without profit or cost data.",
       "forbidden_metrics": [{"op": "sum", "column": "revenue"}]
     },
@@ -149,6 +152,7 @@
       "tags": ["full"],
       "question": "Which category sold the most products?",
       "expected_outcome": "needs_clarification",
+      "expected_action": "request_clarification",
       "rationale": "Neither row count nor revenue establishes how many products were sold.",
       "forbidden_metrics": [
         {"op": "count_rows"},
@@ -160,6 +164,7 @@
       "tags": ["full"],
       "question": "How many unique customers purchased books?",
       "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
       "rationale": "There is no customer identifier and query-plan v2 has no distinct-count operation.",
       "forbidden_metrics": [{"op": "count_rows"}]
     },
@@ -168,6 +173,7 @@
       "tags": ["full"],
       "question": "What was the average price by category?",
       "expected_outcome": "needs_clarification",
+      "expected_action": "request_clarification",
       "rationale": "Revenue is not necessarily unit price and no price field exists.",
       "forbidden_metrics": [{"op": "avg", "column": "revenue"}]
     },
@@ -176,6 +182,7 @@
       "tags": ["full"],
       "question": "What is the profit margin for Books?",
       "expected_outcome": "unanswerable_with_available_data",
+      "expected_action": "request_clarification",
       "rationale": "Profit margin requires cost or profit data, neither of which is available.",
       "forbidden_metrics": [
         {"op": "sum", "column": "revenue"},
