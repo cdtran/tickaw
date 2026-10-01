@@ -94,9 +94,13 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
         t not in {"text", "integer", "number", "boolean", "date", "timestamp", "timestamp_tz"}
         for t in columns.values()
     ):
-        raise PlanError("Catalog must contain supported logical column types")
+        raise PlanError(
+            "Catalog must contain supported logical column types", code="INVALID_CATALOG"
+        )
     if len({name.casefold() for name in columns}) != len(columns):
-        raise PlanError("Catalog has case-insensitive column name collisions")
+        raise PlanError(
+            "Catalog has case-insensitive column name collisions", code="CATALOG_COLUMN_COLLISION"
+        )
 
     def column_type(name):
         if name not in columns:
@@ -108,16 +112,38 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
         return columns[name]
 
     if len(set(plan.dimensions)) != len(plan.dimensions):
-        raise PlanError("Duplicate grouping columns")
+        raise PlanError(
+            "Duplicate grouping columns",
+            code="DUPLICATE_DIMENSION",
+            details={
+                "columns": sorted(
+                    {name for name in plan.dimensions if plan.dimensions.count(name) > 1}
+                )
+            },
+        )
     for name in plan.dimensions:
         column_type(name)
 
     aliases = [metric.alias for metric in plan.metrics]
     if len(set(aliases)) != len(aliases):
-        raise PlanError("Duplicate metric aliases")
+        raise PlanError(
+            "Duplicate metric aliases",
+            code="DUPLICATE_METRIC_ALIAS",
+            details={"aliases": sorted({name for name in aliases if aliases.count(name) > 1})},
+        )
     # Avoid engine-dependent resolution between source columns and output aliases.
     if any(alias.casefold() in {name.casefold() for name in columns} for alias in aliases):
-        raise PlanError("Metric aliases must not collide with source columns")
+        raise PlanError(
+            "Metric aliases must not collide with source columns",
+            code="METRIC_ALIAS_COLLISION",
+            details={
+                "aliases": [
+                    alias
+                    for alias in aliases
+                    if alias.casefold() in {name.casefold() for name in columns}
+                ]
+            },
+        )
     for metric in plan.metrics:
         if isinstance(metric, RowCount):
             continue
@@ -134,7 +160,23 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
                 },
             )
         if metric.op in {"min", "max"} and kind == "boolean":
-            raise PlanError("min/max on booleans is not supported in v2")
+            raise PlanError(
+                "min/max on booleans is not supported in v2",
+                code="METRIC_TYPE_MISMATCH",
+                details={
+                    "operation": metric.op,
+                    "column": metric.column,
+                    "actual_type": kind,
+                    "expected_types": [
+                        "text",
+                        "integer",
+                        "number",
+                        "date",
+                        "timestamp",
+                        "timestamp_tz",
+                    ],
+                },
+            )
 
     for condition in plan.filters:
         kind = column_type(condition.column)
@@ -151,36 +193,114 @@ def validate_plan(payload: dict, columns: dict[str, ColumnType]) -> QueryPlan:
             "timestamp_tz": type(value) is str,
         }[kind]
         if not valid:
-            raise PlanError(f"Filter value does not match {condition.column}'s {kind} type")
+            raise PlanError(
+                f"Filter value does not match {condition.column}'s {kind} type",
+                code="FILTER_TYPE_MISMATCH",
+                details={
+                    "column": condition.column,
+                    "operation": condition.op,
+                    "expected_type": kind,
+                    "actual_type": type(value).__name__,
+                },
+            )
         if kind in {"date", "timestamp", "timestamp_tz"}:
             try:
                 parsed_kind, _ = parse_temporal(value)
             except (ValueError, OverflowError) as error:
-                raise PlanError("Filter requires a valid ISO date/timestamp") from error
+                raise PlanError(
+                    "Filter requires a valid ISO date/timestamp",
+                    code="INVALID_TEMPORAL_FILTER",
+                    details={
+                        "column": condition.column,
+                        "operation": condition.op,
+                        "expected_type": kind,
+                    },
+                ) from error
             if parsed_kind != kind:
-                raise PlanError("Filter must match the column's date/timestamp and timezone type")
+                raise PlanError(
+                    "Filter must match the column's date/timestamp and timezone type",
+                    code="TEMPORAL_FILTER_TYPE_MISMATCH",
+                    details={
+                        "column": condition.column,
+                        "operation": condition.op,
+                        "actual_type": parsed_kind,
+                        "expected_type": kind,
+                    },
+                )
         if kind == "boolean" and condition.op not in {"eq", "ne"}:
-            raise PlanError("Boolean comparisons support only eq/ne")
+            raise PlanError(
+                "Boolean comparisons support only eq/ne",
+                code="FILTER_OPERATION_MISMATCH",
+                details={
+                    "column": condition.column,
+                    "operation": condition.op,
+                    "actual_type": kind,
+                    "expected_operations": ["eq", "ne"],
+                },
+            )
 
     outputs = set(plan.dimensions) | set(aliases)
     ordered = [item.field for item in plan.order_by]
     if len(set(ordered)) != len(ordered):
-        raise PlanError("Duplicate ordering fields")
+        raise PlanError(
+            "Duplicate ordering fields",
+            code="DUPLICATE_ORDERING_FIELD",
+            details={"fields": sorted({name for name in ordered if ordered.count(name) > 1})},
+        )
     if not set(ordered) <= outputs:
-        raise PlanError("Ordering must reference a grouping column or metric alias")
+        raise PlanError(
+            "Ordering must reference a grouping column or metric alias",
+            code="UNKNOWN_ORDERING_FIELD",
+            details={"fields": sorted(set(ordered) - outputs), "available_fields": sorted(outputs)},
+        )
 
     if plan.presentation.type != "table":
         if len(plan.dimensions) != 1:
-            raise PlanError("Charts require exactly one grouping column")
+            raise PlanError(
+                "Charts require exactly one grouping column",
+                code="CHART_DIMENSION_COUNT",
+                details={
+                    "presentation": plan.presentation.type,
+                    "actual_count": len(plan.dimensions),
+                    "expected_count": 1,
+                },
+            )
         if not 1 <= len(plan.metrics) <= 4:
-            raise PlanError("Charts require between one and four metrics")
+            raise PlanError(
+                "Charts require between one and four metrics",
+                code="CHART_METRIC_COUNT",
+                details={
+                    "presentation": plan.presentation.type,
+                    "actual_count": len(plan.metrics),
+                    "minimum_count": 1,
+                    "maximum_count": 4,
+                },
+            )
         for metric in plan.metrics:
             if isinstance(metric, RowCount) or metric.op in {"count_non_null", "sum", "avg"}:
                 continue
             if column_type(metric.column) not in {"integer", "number"}:
-                raise PlanError("Charts require numeric metric outputs")
+                raise PlanError(
+                    "Charts require numeric metric outputs",
+                    code="CHART_METRIC_TYPE_MISMATCH",
+                    details={
+                        "presentation": plan.presentation.type,
+                        "operation": metric.op,
+                        "column": metric.column,
+                        "actual_type": column_type(metric.column),
+                        "expected_types": ["integer", "number"],
+                    },
+                )
         if plan.presentation.type == "line":
             dimension_type = column_type(plan.dimensions[0])
             if dimension_type not in {"text", "date", "timestamp", "timestamp_tz"}:
-                raise PlanError("Line charts require a temporal or text grouping column")
+                raise PlanError(
+                    "Line charts require a temporal or text grouping column",
+                    code="LINE_DIMENSION_TYPE_MISMATCH",
+                    details={
+                        "column": plan.dimensions[0],
+                        "actual_type": dimension_type,
+                        "expected_types": ["text", "date", "timestamp", "timestamp_tz"],
+                    },
+                )
     return plan

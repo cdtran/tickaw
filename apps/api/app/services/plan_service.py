@@ -29,9 +29,11 @@ def safe_validation_diagnostic(error: ValidationError | PlanError) -> dict:
     """Return bounded, display-safe facts without retaining model-authored plan JSON."""
     if isinstance(error, PlanError):
         diagnostic = {"code": error.code}
-        for key, value in error.details.items():
+        for key, value in list(error.details.items())[:8]:
             if isinstance(value, str):
                 diagnostic[key] = value[:128]
+            elif type(value) in {int, bool}:
+                diagnostic[key] = value
             elif isinstance(value, list):
                 diagnostic[key] = [str(item)[:64] for item in value[:8]]
         if not error.details:

@@ -40,6 +40,11 @@ def evaluate_case(gateway, model_id, case, dataset, catalog) -> EvaluationResult
             return EvaluationResult("provider_runtime_failure", ("PROVIDER_ERROR",))
         try:
             plan = validate_plan(response.payload, catalog)
+            active_issue = check_question_meaning(case["question"], plan, catalog)
+            if active_issue and active_issue.concept == "active_record_count":
+                raise PlanError(
+                    active_issue.message, code=active_issue.code, details=active_issue.diagnostic()
+                )
         except (ValidationError, PlanError) as error:
             diagnostics.append(safe_validation_diagnostic(error))
             if attempt == 0:

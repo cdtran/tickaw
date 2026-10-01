@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass
 
-from packages.data_engine.query_plan import QueryPlan, RowCount
+from packages.data_engine.query_plan import Comparison, QueryPlan, RowCount
 
 
 @dataclass(frozen=True)
@@ -66,17 +66,59 @@ def plan_measure(plan: QueryPlan) -> str:
     return ",".join(measures)
 
 
+def active_record_count_issue(question, plan, catalog, clarification):
+    """Evidence: active-records-by-category baseline counted non-null booleans.
+
+    Match only an explicit count request and an optional known grouping column.
+    Resumed clarification wording is outside this rule's narrow evidence base.
+    """
+    if catalog.get("active") != "boolean" or clarification:
+        return None
+    groups = "|".join(re.escape(name) for name in catalog)
+    pattern = (
+        r"(?:how many active records(?: are there| are)?|count(?: the)? active records)"
+        rf"(?: (?:by|per|in each|for each) (?:{groups}))?[?.!]?"
+    )
+    if not re.fullmatch(pattern, question.strip(), re.IGNORECASE):
+        return None
+    if not any(isinstance(metric, RowCount) for metric in plan.metrics):
+        return MeaningIssue(
+            "SEMANTIC_SUBSTITUTION",
+            "active_record_count",
+            "Counting active records requires a row-count metric; non-null Boolean values "
+            "include both true and false.",
+            plan_measure(plan),
+        )
+    # Require one unambiguous active predicate; unrelated filters are outside this check.
+    active_filters = [condition for condition in plan.filters if condition.column == "active"]
+    if len(active_filters) == 1 and isinstance(active_filters[0], Comparison):
+        condition = active_filters[0]
+        if (condition.op == "eq" and condition.value is True) or (
+            condition.op == "ne" and condition.value is False
+        ):
+            return None
+    return MeaningIssue(
+        "MISSING_REQUIRED_FILTER",
+        "active_record_count",
+        "Counting active records requires filtering the Boolean active field to true.",
+        plan_measure(plan),
+    )
+
+
 def check_question_meaning(
     question: str,
     plan: QueryPlan,
     catalog: dict[str, str],
     clarification: str | None = None,
 ) -> MeaningIssue | None:
-    """Reject only explicit business measures absent from the schema.
+    """Reject explicit business-measure substitutions and narrow active-record counts.
 
     This deliberately does not attempt general natural-language equivalence. It prevents a
     small set of high-confidence substitutions while leaving uncertain wording to the model.
     """
+    active_issue = active_record_count_issue(question, plan, catalog, clarification)
+    if active_issue:
+        return active_issue
     clarification_text = (clarification or "").casefold()
     explicit_row_count = bool(
         re.search(r"\b(?:row|rows|record|records|transaction|transactions)\b", clarification_text)

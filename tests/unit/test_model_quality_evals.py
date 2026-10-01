@@ -207,3 +207,50 @@ def test_report_metadata_and_cached_run(tmp_path, monkeypatch):
     assert runner.run("test", suite_path, {"total-revenue"}, **kwargs) == 0
     assert len(calls) == 1
     assert json.loads(report.read_text())["cases"][0]["cache_hits"] == 1
+
+
+def test_active_semantic_failure_gets_one_correction_attempt():
+    from types import SimpleNamespace
+
+    from evals.model_quality.run import evaluate_case
+
+    suite, dataset = load_suite()
+    case = case_by_id(suite, "active-records-by-category")
+    bad = {
+        "plan_version": 2,
+        "dimensions": ["category"],
+        "metrics": [{"op": "count_non_null", "column": "active", "alias": "active_count"}],
+        "filters": [],
+        "order_by": [],
+        "limit": 100,
+        "presentation": {"type": "bar"},
+    }
+    good = bad | {
+        "metrics": [{"op": "count_rows", "alias": "active_count"}],
+        "filters": [{"column": "active", "op": "eq", "value": True}],
+    }
+    requests = []
+
+    def generate(model, request):
+        requests.append(request)
+        return SimpleNamespace(payload=bad if len(requests) == 1 else good)
+
+    result = evaluate_case(
+        SimpleNamespace(generate_plan=generate), "test", case, dataset, catalog_for(dataset)
+    )
+    assert result.outcome == "valid_plan"
+    assert len(requests) == 2
+    assert "non-null Boolean" in requests[1].validation_feedback
+
+    requests.clear()
+
+    def always_bad(model, request):
+        requests.append(request)
+        return SimpleNamespace(payload=bad)
+
+    result = evaluate_case(
+        SimpleNamespace(generate_plan=always_bad), "test", case, dataset, catalog_for(dataset)
+    )
+    assert result.outcome == "invalid_model_output"
+    assert result.reasons == ("SEMANTIC_SUBSTITUTION", "SEMANTIC_SUBSTITUTION")
+    assert len(requests) == 2

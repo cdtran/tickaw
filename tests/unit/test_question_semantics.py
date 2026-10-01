@@ -91,3 +91,51 @@ def test_explicit_clarification_can_authorize_row_count_substitution():
         )
         is None
     )
+
+
+def test_active_count_guard_rejects_observed_non_null_substitution():
+    issue = check_question_meaning(
+        "How many active records are in each category?",
+        plan({"op": "count_non_null", "column": "active", "alias": "active_count"}),
+        CATALOG,
+    )
+    assert issue.code == "SEMANTIC_SUBSTITUTION"
+    assert issue.concept == "active_record_count"
+
+
+def test_active_count_requires_true_filter_and_accepts_equivalent_boolean_filter():
+    from packages.data_engine.query_plan import Comparison
+
+    count = plan({"op": "count_rows", "alias": "record_count"})
+    question = "How many active records are in each category?"
+    assert check_question_meaning(question, count, CATALOG).code == "MISSING_REQUIRED_FILTER"
+    for op, value in [("eq", True), ("ne", False)]:
+        filtered = count.model_copy(
+            update={"filters": [Comparison(column="active", op=op, value=value)]}
+        )
+        assert check_question_meaning(question, filtered, CATALOG) is None
+    wrong = count.model_copy(
+        update={"filters": [Comparison(column="active", op="eq", value=False)]}
+    )
+    assert check_question_meaning(question, wrong, CATALOG).code == "MISSING_REQUIRED_FILTER"
+
+
+def test_active_guard_abstains_on_ambiguous_wording_schema_and_clarification():
+    count = plan({"op": "count_rows", "alias": "record_count"})
+    for question in [
+        "Count inactive records by category.",
+        "Count active and inactive records.",
+        "Count non-null active values by category.",
+        "Show active records by category.",
+        "How many active records were there before activation?",
+    ]:
+        assert check_question_meaning(question, count, CATALOG) is None
+    assert (
+        check_question_meaning("Count active records.", count, CATALOG | {"active": "text"}) is None
+    )
+    assert (
+        check_question_meaning(
+            "Count active records.", count, CATALOG, clarification="Include inactive records too."
+        )
+        is None
+    )

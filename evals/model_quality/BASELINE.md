@@ -34,3 +34,12 @@ local run establishes a reference, not a statistical reliability estimate. The c
 model names rather than weight digests; refresh when local model weights change.
 
 Full cache replay reproduced all 20 outcomes with 24 cache hits and zero fresh requests.
+
+## Follow-up: active-record semantic guard
+
+The narrow active-record rule rejected the cached `count_non_null(active)` plan. The
+existing single correction attempt then produced a valid row count with an active filter.
+The targeted case passed using one cache hit and one fresh Qwen request (prompt version
+unchanged). Metadata is saved locally in `artifacts/model-quality/active-guard.json`.
+This demonstrates correction for the observed failure; the original 17/20 baseline above
+remains the historical reference, and no new full-suite pass rate is claimed.

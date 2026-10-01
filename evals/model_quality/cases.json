@@ -1,9 +1,11 @@
 {
   "suite_version": 1,
+  "revision": "2026-09-30.1",
   "dataset": "profile_demo.json",
   "cases": [
     {
       "id": "average-books-sold-per-day",
+      "tags": ["full", "smoke"],
       "question": "What’s the average number of books sold per day?",
       "expected_outcome": "unanswerable_with_available_data",
       "rationale": "No quantity or units-sold field exists. Revenue and row count are not substitutes for books sold.",
@@ -14,6 +16,7 @@
     },
     {
       "id": "book-transaction-rows-per-day",
+      "tags": ["full", "smoke"],
       "question": "Count the book transaction rows per day.",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["date"],
@@ -22,6 +25,7 @@
     },
     {
       "id": "average-book-revenue-per-day",
+      "tags": ["full"],
       "question": "What is the average book revenue per day?",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["date"],
@@ -30,6 +34,7 @@
     },
     {
       "id": "revenue-by-category-and-date",
+      "tags": ["full"],
       "question": "Show revenue by category and date.",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["category", "date"],
@@ -37,6 +42,7 @@
     },
     {
       "id": "quantity-language-without-quantity",
+      "tags": ["full", "smoke"],
       "question": "How many units were sold in each category?",
       "expected_outcome": "needs_clarification",
       "rationale": "The dataset does not define units or quantity; counting rows silently changes the question.",
@@ -44,6 +50,7 @@
     },
     {
       "id": "missing-profit-field",
+      "tags": ["full"],
       "question": "What was the total profit by category?",
       "expected_outcome": "unanswerable_with_available_data",
       "rationale": "Profit cannot be calculated without profit or cost data.",
@@ -51,6 +58,7 @@
     },
     {
       "id": "total-revenue",
+      "tags": ["full", "smoke"],
       "question": "What is the total revenue?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
@@ -59,6 +67,7 @@
     },
     {
       "id": "average-revenue-by-category",
+      "tags": ["full"],
       "question": "What is the average recorded revenue for each category?",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["category"],
@@ -66,6 +75,7 @@
     },
     {
       "id": "record-count-by-date",
+      "tags": ["full"],
       "question": "How many records are there per date?",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["date"],
@@ -73,6 +83,7 @@
     },
     {
       "id": "non-null-revenue-by-category",
+      "tags": ["full"],
       "question": "Count the non-null revenue values by category.",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["category"],
@@ -80,6 +91,7 @@
     },
     {
       "id": "missing-revenue-rows",
+      "tags": ["full", "smoke"],
       "question": "Count rows with missing revenue by category.",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["category"],
@@ -88,6 +100,7 @@
     },
     {
       "id": "active-records-by-category",
+      "tags": ["full", "smoke"],
       "question": "How many active records are in each category?",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["category"],
@@ -96,6 +109,7 @@
     },
     {
       "id": "books-total-revenue",
+      "tags": ["full"],
       "question": "What is the total revenue for Books?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
@@ -104,6 +118,7 @@
     },
     {
       "id": "games-average-revenue",
+      "tags": ["full"],
       "question": "What is the average revenue for Games?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
@@ -112,6 +127,7 @@
     },
     {
       "id": "highest-revenue-category",
+      "tags": ["full", "smoke"],
       "question": "Which category has the highest total revenue?",
       "expected_outcome": "valid_plan",
       "required_dimensions": ["category"],
@@ -121,6 +137,7 @@
     },
     {
       "id": "earliest-recorded-date",
+      "tags": ["full"],
       "question": "What is the earliest recorded date?",
       "expected_outcome": "valid_plan",
       "required_dimensions": [],
@@ -129,6 +146,7 @@
     },
     {
       "id": "best-selling-category-without-quantity",
+      "tags": ["full"],
       "question": "Which category sold the most products?",
       "expected_outcome": "needs_clarification",
       "rationale": "Neither row count nor revenue establishes how many products were sold.",
@@ -139,6 +157,7 @@
     },
     {
       "id": "unique-customers-without-customer",
+      "tags": ["full"],
       "question": "How many unique customers purchased books?",
       "expected_outcome": "unanswerable_with_available_data",
       "rationale": "There is no customer identifier and query-plan v2 has no distinct-count operation.",
@@ -146,6 +165,7 @@
     },
     {
       "id": "average-price-without-price",
+      "tags": ["full"],
       "question": "What was the average price by category?",
       "expected_outcome": "needs_clarification",
       "rationale": "Revenue is not necessarily unit price and no price field exists.",
@@ -153,6 +173,7 @@
     },
     {
       "id": "profit-margin-without-cost",
+      "tags": ["full"],
       "question": "What is the profit margin for Books?",
       "expected_outcome": "unanswerable_with_available_data",
       "rationale": "Profit margin requires cost or profit data, neither of which is available.",
