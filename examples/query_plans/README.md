@@ -39,10 +39,12 @@ print(compile_sql(case["plan"], fixture["columns"]))
 ```
 
 The compiler builds expression objects directly. It does not parse SQL strings
-supplied by the model. It targets a fixed quoted relation named `dataset`; a future
-execution adapter will register the question's pinned dataset under that name.
+supplied by the model. It targets a fixed quoted relation named `dataset`; the
+execution adapter registers the question's pinned dataset under that name.
 Values are typed AST literals rendered by SQLGlot, not interpolated SQL fragments.
-The [Parquet executor](../../docs/query-execution.md) now runs these plans in a bounded child process. Notebook/storage orchestration is still pending.
+The [Parquet executor](../../packages/data_engine/README.md) runs these plans in a
+bounded child process. The application executes notebook questions against their pinned
+dataset versions.
 
 ## Run the checks
 
@@ -52,8 +54,8 @@ Install the versions declared in `pyproject.toml` (including dev dependencies), 
 python -m pytest tests/unit/test_query_plans.py -q
 ```
 
-DuckDB is a runtime dependency for the Parquet executor. Notebook execution is not
-wired up yet. SQLGlot and DuckDB are pinned because compiler/engine behavior is versioned.
+DuckDB is a runtime dependency for the Parquet executor. SQLGlot and DuckDB are
+pinned because compiler/engine behavior is versioned.
 
 To regenerate the schema after an intentional contract change:
 

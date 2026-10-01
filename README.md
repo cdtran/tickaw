@@ -63,7 +63,8 @@ stage names are progress states, not separate services.
 - `packages/charting` — deterministic persisted chart specifications
 - `docker` — local container build definitions
 - `infra/terraform` — future AWS deployment scaffold
-- `docs` — design notes, walkthroughs, and local-development guides
+- `evals/model_quality` — model-quality cases, scoring, and live evaluation runner
+- `examples/query_plans` — query-plan fixtures and runnable execution examples
 
 The local stack runs the API, web development server, profiling worker, analysis worker,
 PostgreSQL, MinIO, and Redis in Docker. Redis stores the analysis queue with append-only
@@ -160,8 +161,8 @@ registry routes and adapters without changing notebook or analysis-run contracts
 - Temporal line charts are emitted only when profiled samples and returned x-axis values are
   uniformly valid ISO dates or timestamps.
 
-See [query-plan design](docs/query-plan.md) and the
-[execution walkthrough](docs/query-execution.md) for more detail.
+See the [data engine](packages/data_engine/README.md) and
+[runnable query-plan examples](examples/query_plans/README.md) for more detail.
 
 ## Verification
 
@@ -201,6 +202,7 @@ database constraints, and durable result persistence.
 
 Additional guides:
 
-- [Local development](docs/local-development.md)
-- [Implementation workbook](docs/implementation-workbook.md)
-- [Notebook foundation](docs/notebook-foundation.md)
+- [API and workers](apps/api/README.md)
+- [Web frontend](apps/web/README.md)
+- [LLM gateway](packages/llm_gateway/README.md)
+- [Terraform deployment scaffold](infra/terraform/README.md)

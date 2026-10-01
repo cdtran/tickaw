@@ -48,6 +48,10 @@ def validate_suite(suite: dict[str, Any], dataset: dict[str, Any]) -> None:
     if len(ids) != len(set(ids)):
         raise ValueError("Model-quality case ids must be unique")
     for case in cases:
+        tags = case.get("tags", [])
+        if (not isinstance(tags, list) or not tags
+                or any(tag not in {"smoke", "full", "release"} for tag in tags)):
+            raise ValueError(f"Case {case['id']} must have supported tier tags")
         if not isinstance(case.get("question"), str) or not case["question"].strip():
             raise ValueError(f"Case {case['id']} must have a question")
         if case.get("expected_outcome") not in OUTCOMES:

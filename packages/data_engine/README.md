@@ -14,5 +14,6 @@ will control whether a time series fills gaps with zeroes.
 - `execution_child.py`: private Parquet/DuckDB subprocess.
 - `result_types.py`: versioned success/failure and table contracts.
 
-See [query execution](../../docs/query-execution.md) for a runnable example,
-serialization rules, resource limits, tests, and production isolation requirements.
+See the [query-plan examples](../../examples/query_plans/README.md) for runnable
+execution examples and checks. [Execution policies](execution.py) define resource
+limits, and [result types](result_types.py) define the serialization contract.
