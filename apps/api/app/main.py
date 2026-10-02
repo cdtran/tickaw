@@ -12,6 +12,15 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def private_api_responses(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 app.include_router(router)
 
 

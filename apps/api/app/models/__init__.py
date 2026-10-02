@@ -10,3 +10,6 @@ __all__ += ["Notebook", "NotebookCell"]
 
 from app.models.analysis_job import AnalysisRun
 __all__ += ["AnalysisRun"]
+
+from app.models.auth import User, BrowserSession, LoginTransaction
+__all__ += ["User", "BrowserSession", "LoginTransaction"]

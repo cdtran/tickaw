@@ -26,6 +26,7 @@ def main():
             ["python", "-m", "tests.check_profiling"],
             ["python", "-m", "tests.check_notebooks"],
             ["python", "-m", "tests.check_analysis"],
+            ["python", "-m", "tests.check_authentication"],
             ["alembic", "downgrade", "base"],
             ["alembic", "upgrade", "head"],
             ["python", "-m", "tests.check_database"],

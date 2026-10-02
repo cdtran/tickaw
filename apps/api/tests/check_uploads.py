@@ -5,7 +5,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from botocore.exceptions import ClientError, EndpointConnectionError
-from fastapi.testclient import TestClient
+from tests.auth_helpers import authenticated_client
 from sqlalchemy import delete, select
 from sqlalchemy.engine import make_url
 
@@ -28,7 +28,7 @@ class UploadTests(unittest.TestCase):
         cls.settings.object_storage_bucket = cls.bucket
         cls.storage = get_storage_client()
         cls.storage.create_bucket(Bucket=cls.bucket)
-        cls.client = TestClient(app)
+        cls.client, cls.user_id = authenticated_client()
 
     def tearDown(self):
         with get_session_factory()() as session:

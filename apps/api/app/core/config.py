@@ -9,6 +9,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
     database_url: SecretStr
+    auth_issuer: str = ""
+    auth_domain: str = ""
+    auth_client_id: str = ""
+    auth_client_secret: SecretStr | None = None
+    auth_app_origin: str = "http://localhost:5173"
+    auth_cookie_secure: bool = True
+    auth_session_seconds: int = Field(default=3600, ge=60, le=3600)
     redis_url: str = "redis://redis:6379/0"
     object_storage_bucket: str = "data-notebook-dev"
     aws_region: str = "us-east-1"

@@ -2,7 +2,7 @@
 import unicodedata
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
@@ -11,6 +11,9 @@ from app.schemas.dataset import DatasetResponse, JobResponse, VersionDetail
 from app.models import DatasetVersion
 from app.services.profiling_service import job_for_version, request_profile
 from app.services import dataset_service
+
+from app.services.auth_service import current_user
+from app.services.ownership import owned_version
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 CSV_MIME_TYPES = {"text/csv", "application/csv", "application/vnd.ms-excel", "text/plain"}
@@ -30,14 +33,14 @@ def upload_config() -> dict[str, int]:
 
 
 @router.get("", response_model=list[DatasetResponse])
-def get_datasets(offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100)):
+def get_datasets(offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), user=Depends(current_user)):
     with get_session_factory()() as session:
-        return dataset_service.list_datasets(session, offset, limit)
+        return dataset_service.list_datasets(session, offset, limit, user.id)
 
 
 @router.post("/uploads", response_model=DatasetResponse, status_code=201)
 async def upload(request: Request, filename: str = Query(..., max_length=255),
-                 dataset_id: UUID | None = None):
+                 dataset_id: UUID | None = None, user=Depends(current_user)):
     validate_filename(filename)
     mime = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if mime not in CSV_MIME_TYPES:
@@ -71,16 +74,16 @@ async def upload(request: Request, filename: str = Query(..., max_length=255),
 
     def persist():
         with get_session_factory()() as session:
-            return dataset_service.upload_csv(session, filename, bytes(body), dataset_id)
+            return dataset_service.upload_csv(session, filename, bytes(body), dataset_id, user.id)
 
     # Boto3 and SQLAlchemy are synchronous; keep their I/O off the async event loop.
     return await run_in_threadpool(persist)
 
 
 @router.get("/versions/{version_id}", response_model=VersionDetail)
-def version_detail(version_id: UUID):
+def version_detail(version_id: UUID, user=Depends(current_user)):
     with get_session_factory()() as session:
-        version = session.get(DatasetVersion, version_id)
+        version = owned_version(session, version_id, user.id)
         if version is None:
             raise HTTPException(404, "Dataset version not found.")
         result = VersionDetail.model_validate(version)
@@ -90,7 +93,8 @@ def version_detail(version_id: UUID):
 
 
 @router.post("/versions/{version_id}/profile", status_code=202)
-def start_profile(version_id: UUID):
+def start_profile(version_id: UUID, user=Depends(current_user)):
     with get_session_factory()() as session:
+        owned_version(session, version_id, user.id)
         request_profile(session, version_id)
     return {"version_id": str(version_id), "message": "Profiling requested; completed versions are unchanged."}

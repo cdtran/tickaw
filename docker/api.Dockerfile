@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir \
     "boto3>=1.36" \
     "redis>=5.0,<7" \
     "httpx>=0.28" \
+    "PyJWT[crypto]>=2.10,<3" \
     "pandas>=2.2,<3" \
     "pyarrow>=18,<24"
 
@@ -25,4 +26,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]

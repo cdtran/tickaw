@@ -15,7 +15,7 @@ from app.services.analysis_service import (
     start_run,
 )
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
+from tests.auth_helpers import authenticated_client
 from sqlalchemy import update
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
@@ -52,7 +52,8 @@ def main():
         }
     )
     with get_session_factory()() as session:
-        dataset = Dataset(name="Analysis fixture")
+        client, user_id = authenticated_client()
+        dataset = Dataset(name="Analysis fixture", owner_id=user_id)
         session.add(dataset)
         session.flush()
         version = DatasetVersion(
@@ -71,7 +72,7 @@ def main():
             row_count=2,
             completed_at=datetime.now(UTC),
         )
-        notebook = Notebook(title="Analysis")
+        notebook = Notebook(title="Analysis", owner_id=user_id)
         session.add_all([version, notebook])
         session.flush()
         cell = NotebookCell(
@@ -132,7 +133,6 @@ def main():
         assert stored.chart and stored.chart.type == "bar" and stored.chart.x == "region"
         assert stored.chart.series[0].column == "total_revenue"
 
-        client = TestClient(app)
         detail = client.get(f"/api/v1/notebooks/{notebook.id}").json()
         assert detail["cells"][0]["latest_analysis"]["id"] == str(run.id)
         response = client.get(f"/api/v1/analysis-runs/{run.id}/result")

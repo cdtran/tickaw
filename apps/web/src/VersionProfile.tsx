@@ -1,3 +1,4 @@
+import { apiFetch } from "./api/client";
 import { useEffect, useRef, useState } from "react";
 
 type Cell = string | number | boolean | null;
@@ -32,7 +33,7 @@ export default function VersionProfile({ versionId, onStatus }: {
     setError("");
     async function load() {
       try {
-        const response = await fetch(`/api/v1/datasets/versions/${versionId}`, { signal: controller.signal });
+        const response = await apiFetch(`/api/v1/datasets/versions/${versionId}`, { signal: controller.signal });
         if (!response.ok) throw new Error("Could not load this version's profile.");
         const record: Detail = await response.json();
         if (controller.signal.aborted) return;
@@ -53,7 +54,7 @@ export default function VersionProfile({ versionId, onStatus }: {
     setRequesting(true);
     setError("");
     try {
-      const response = await fetch(`/api/v1/datasets/versions/${versionId}/profile`, { method: "POST" });
+      const response = await apiFetch(`/api/v1/datasets/versions/${versionId}/profile`, { method: "POST" });
       if (!response.ok) {
         const body = await response.json();
         throw new Error(typeof body.detail === "string" ? body.detail : "Could not start profiling.");

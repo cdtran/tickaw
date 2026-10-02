@@ -1,3 +1,4 @@
+import { apiFetch } from "../api/client";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import ResultCell, { PersistedResult } from "../components/notebook/ResultCell";
@@ -10,7 +11,7 @@ type Detail = Notebook & { cells: Cell[] };
 type Dataset = { id: string; name: string; versions: { id: string; version_number: number; status: string }[] };
 
 async function request<T>(url: string, body?: object, headers?: Record<string, string>): Promise<T> {
-  const response = await fetch(`/api/v1/${url}`, body ? {
+  const response = await apiFetch(`/api/v1/${url}`, body ? {
     method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body),
   } : undefined);
   const text = await response.text();

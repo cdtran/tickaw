@@ -82,3 +82,5 @@ details pre { overflow-x: auto; padding: 1rem; border-radius: .5rem; background:
   .result-provenance dl { grid-template-columns: 1fr; }
   .result-chart { height: 280px; }
 }
+
+.account-bar { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; padding: 1rem 2rem; }

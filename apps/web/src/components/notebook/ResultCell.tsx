@@ -1,3 +1,4 @@
+import { apiFetch } from "../../api/client";
 import { useEffect, useId, useState } from "react";
 import type { FormEvent } from "react";
 import {
@@ -334,7 +335,7 @@ export function PersistedResult({
     async function load() {
       if (!active) return;
       try {
-        const statusResponse = await fetch(
+        const statusResponse = await apiFetch(
           `/api/v1/analysis-runs/${encodeURIComponent(analysis.id)}`,
         );
         const statusBody = await statusResponse.json();
@@ -345,7 +346,7 @@ export function PersistedResult({
         const current = statusBody as AnalysisRunSummary;
         setRun(current);
         if (current.status === "SUCCEEDED") {
-          const resultResponse = await fetch(
+          const resultResponse = await apiFetch(
             `/api/v1/analysis-runs/${encodeURIComponent(analysis.id)}/result`,
           );
           const resultBody = await resultResponse.json();
@@ -372,7 +373,7 @@ export function PersistedResult({
     setSubmitting(true);
     setError("");
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/v1/analysis-runs/${encodeURIComponent(run.id)}/clarification`,
         {
           method: "POST",
@@ -395,7 +396,7 @@ export function PersistedResult({
     setRetrying(true);
     setError("");
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/v1/notebooks/${encodeURIComponent(notebookId)}/cells/${encodeURIComponent(cellId)}/analysis-runs`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
       );

@@ -17,9 +17,9 @@ from app.services.profiling_service import enqueue_profile
 logger = logging.getLogger(__name__)
 
 
-def list_datasets(session: Session, offset: int, limit: int) -> list[DatasetResponse]:
+def list_datasets(session: Session, offset: int, limit: int, owner_id: UUID | None = None) -> list[DatasetResponse]:
     datasets = session.scalars(
-        select(Dataset).options(selectinload(Dataset.versions))
+        select(Dataset).where(Dataset.owner_id == owner_id).options(selectinload(Dataset.versions))
         .order_by(Dataset.created_at.desc(), Dataset.id).offset(offset).limit(limit)
     ).all()
     return [describe_dataset(dataset) for dataset in datasets]
@@ -32,14 +32,14 @@ def describe_dataset(dataset: Dataset) -> DatasetResponse:
 
 
 def upload_csv(session: Session, filename: str, data: bytes,
-               dataset_id: UUID | None) -> DatasetResponse:
+               dataset_id: UUID | None, owner_id: UUID | None = None) -> DatasetResponse:
     if dataset_id:
         # Serialize version allocation for this dataset only, not all uploads.
         dataset = session.scalar(select(Dataset).where(Dataset.id == dataset_id).with_for_update())
-        if dataset is None:
+        if dataset is None or dataset.owner_id != owner_id:
             raise HTTPException(404, "Dataset not found.")
     else:
-        dataset = Dataset(name=filename[:-4])
+        dataset = Dataset(name=filename[:-4], owner_id=owner_id)
         session.add(dataset)
         session.flush()
 

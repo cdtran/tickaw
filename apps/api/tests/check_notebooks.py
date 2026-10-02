@@ -9,6 +9,8 @@ from app.models import AnalysisRun, Dataset, DatasetVersion, Notebook
 from app.services.plan_service import PlanGenerationError, generate_plan
 from app.services.analysis_service import request_clarification, start_run
 from fastapi.testclient import TestClient
+from tests.auth_helpers import authenticated_client
+from packages.llm_gateway.prompts import PROMPT_VERSION
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 
@@ -40,9 +42,9 @@ class FakeGateway:
 
 
 def main():
-    client = TestClient(app)
+    client, user_id = authenticated_client()
     with get_session_factory()() as session:
-        dataset = Dataset(name="Notebook fixture")
+        dataset = Dataset(name="Notebook fixture", owner_id=user_id)
         session.add(dataset)
         session.flush()
         version = DatasetVersion(dataset_id=dataset.id, version_number=1, status="READY",
@@ -113,7 +115,7 @@ def main():
         run = session.get(AnalysisRun, cell['latest_analysis']['id'])
         plan, plan_response = generate_plan(session, run, fake_gateway)
     assert plan.metrics[0].alias == 'row_count'
-    assert plan_response.prompt_version == 'query-plan-v2.8'
+    assert plan_response.prompt_version == PROMPT_VERSION
     assert fake_gateway.calls[0][0] == 'qwen-local'
     submitted = fake_gateway.calls[0][1]
     assert submitted.question == 'Revenue by region?'
@@ -206,7 +208,7 @@ def main():
         json={'answer': '   '},
     ).status_code == 422
     # A new client/request/session models a reload, without in-memory UI state.
-    loaded = TestClient(app).get(path).json()
+    loaded = TestClient(app, cookies=dict(client.cookies)).get(path).json()
     assert loaded['cells'][0]['id'] == cell['id']
     assert loaded['cells'][0]['latest_analysis']['id'] == retry.json()['id']
     assert loaded['updated_at'] >= notebook['updated_at']

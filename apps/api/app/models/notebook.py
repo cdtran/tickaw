@@ -14,6 +14,7 @@ class Notebook(Base):
     id: Mapped[UUID] = mapped_column(
         primary_key=True, default=uuid4, comment="Stable identifier for the notebook."
     )
+    owner_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     title: Mapped[str] = mapped_column(Text, comment="User-facing notebook title.")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), comment="Time the notebook was created."

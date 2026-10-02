@@ -1,7 +1,9 @@
+import { apiFetch } from "./api/client";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import "./styles.css";
 import NotebookPage from "./pages/NotebookPage";
+import AuthGate from "./components/AuthGate";
 import VersionProfile from "./VersionProfile";
 
 type Version = {
@@ -23,6 +25,10 @@ async function readResponse<T>(response: Response): Promise<T> {
 }
 
 export default function App() {
+  return <AuthGate><AuthenticatedApp /></AuthGate>;
+}
+
+function AuthenticatedApp() {
   const [route, setRoute] = useState(window.location.hash);
   useEffect(() => {
     const change = () => setRoute(window.location.hash);
@@ -51,7 +57,7 @@ function DatasetsPage() {
   async function refresh(pageOffset = offset) {
     setLoading(true);
     try {
-      const records = await readResponse<Dataset[]>(await fetch(`/api/v1/datasets?offset=${pageOffset}&limit=50`));
+      const records = await readResponse<Dataset[]>(await apiFetch(`/api/v1/datasets?offset=${pageOffset}&limit=50`));
       setDatasets(records);
     } finally {
       setLoading(false);
@@ -60,7 +66,7 @@ function DatasetsPage() {
 
   useEffect(() => {
     refresh(0).catch(() => setError("Could not load datasets. Check that the API is running, then refresh."));
-    fetch("/api/v1/datasets/upload-config").then(readResponse<{ max_upload_bytes: number }>)
+    apiFetch("/api/v1/datasets/upload-config").then(readResponse<{ max_upload_bytes: number }>)
       .then(config => setMaximum(config.max_upload_bytes))
       .catch(() => setError("Could not load upload settings. Reload the page to try again."));
   }, []);
@@ -81,7 +87,7 @@ function DatasetsPage() {
     try {
       const query = new URLSearchParams({ filename: file.name });
       if (target) query.set("dataset_id", target);
-      const result = await readResponse<Dataset>(await fetch(`/api/v1/datasets/uploads?${query}`, {
+      const result = await readResponse<Dataset>(await apiFetch(`/api/v1/datasets/uploads?${query}`, {
         method: "POST",
         // Some browsers leave CSV's MIME type empty; use the standard CSV type then.
         headers: { "Content-Type": file.type || "text/csv" },

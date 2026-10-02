@@ -26,6 +26,7 @@ class Dataset(Base):
     id: Mapped[UUID] = mapped_column(
         primary_key=True, default=uuid4, comment="Stable identifier for the dataset."
     )
+    owner_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
     name: Mapped[str] = mapped_column(Text, comment="User-facing dataset name.")
     description: Mapped[str | None] = mapped_column(
         Text, comment="Optional user-facing description of the dataset."
