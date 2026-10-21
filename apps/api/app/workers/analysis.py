@@ -1,6 +1,5 @@
 """Durable analysis worker for normalized Parquet query execution."""
 
-import logging
 import os
 import socket
 import tempfile
@@ -18,6 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
+from app.core.observability import event
 from app.db.session import get_session_factory
 from app.models import AnalysisRun, DatasetVersion
 from app.services.analysis_queue import GROUP, STREAM, get_queue
@@ -37,7 +37,6 @@ from app.services.plan_service import PlanGenerationError, generate_plan
 from packages.data_engine.execution import ExecutionLimits, catalog_from_profile, execute_plan
 from packages.data_engine.result_types import ExecutionFailure
 
-logger = logging.getLogger(__name__)
 RECOVERY_SCAN_SECONDS = 30.0
 PENDING_IDLE_MS = 5 * 60 * 1000
 HEARTBEAT_SECONDS = 10
@@ -75,8 +74,8 @@ def lease_heartbeat(run_id: UUID, worker_id: str):
                 with get_session_factory()() as heartbeat_session:
                     if not renew_lease(heartbeat_session, run_id, worker_id):
                         return
-            except Exception:
-                logger.exception("Could not renew analysis lease run=%s", run_id)
+            except Exception:  # noqa: BLE001 -- recover durable work without logging sensitive exceptions.
+                event("operation.failed", operation="lease_renewal", run_id=run_id)
 
     thread = threading.Thread(target=beat, name=f"analysis-heartbeat-{run_id}", daemon=True)
     thread.start()
@@ -215,7 +214,7 @@ def run_job(run_id: UUID, worker_id: str = "recovery") -> bool:
                                 session, run.id, error.code, str(error), error.diagnostics
                             )
                     except (BotoCoreError, ClientError) as error:
-                        logger.exception("Storage failure analysis_run=%s", run.id)
+                        event("operation.failed", operation="storage_download", run_id=run.id)
                         action = schedule_retry if transient_storage_error(error) else fail_run
                         action(
                             session,
@@ -223,8 +222,8 @@ def run_job(run_id: UUID, worker_id: str = "recovery") -> bool:
                             "STORAGE_ERROR",
                             "The normalized dataset could not be downloaded.",
                         )
-                    except Exception:
-                        logger.exception("Unexpected analysis failure run=%s", run.id)
+                    except Exception:  # noqa: BLE001 -- recover durable work without logging sensitive exceptions.
+                        event("operation.failed", operation="analysis", run_id=run.id)
                         session.rollback()
                         current = session.get(AnalysisRun, run.id)
                         if current is not None and current.status in {"QUEUED", "PROCESSING"}:
@@ -293,7 +292,7 @@ def process_message(queue: redis.Redis, message_id: str, values: dict, worker_id
     try:
         run_id = UUID(values["run_id"])
     except (KeyError, TypeError, ValueError):
-        logger.error("Discarding invalid analysis queue message=%s", message_id)
+        event("operation.failed", operation="queue_message")
         acknowledge(queue, message_id)
         return
     # The advisory lock protects the long-running job against duplicate delivery.
@@ -323,7 +322,6 @@ def recover_pending(queue: redis.Redis, consumer: str) -> None:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     consumer = f"{socket.gethostname()}-{os.getpid()}"
     last_recovery = 0.0
     while True:
@@ -341,14 +339,14 @@ def main() -> None:
                 for message_id, values in messages:
                     process_message(queue, message_id, values, consumer)
         except redis.RedisError:
-            logger.exception("Analysis queue unavailable; scanning durable database")
+            event("operation.failed", operation="analysis_queue")
             try:
                 run_once(consumer)
-            except Exception:
-                logger.exception("Analysis database recovery scan failed")
+            except Exception:  # noqa: BLE001 -- recover durable work without logging sensitive exceptions.
+                event("operation.failed", operation="analysis_recovery")
             time.sleep(1)
-        except Exception:
-            logger.exception("Analysis worker iteration failed; queued runs remain durable")
+        except Exception:  # noqa: BLE001 -- recover durable work without logging sensitive exceptions.
+            event("operation.failed", operation="analysis_iteration")
             time.sleep(1)
 
 

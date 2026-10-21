@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.observability import analysis_state, event
 from app.models import AnalysisRun, DatasetVersion, NotebookCell
 from app.schemas.analysis import StoredAnalysisResult
 from app.services.analysis_queue import enqueue_run
@@ -75,6 +76,7 @@ def create_run(
     session.commit()
     enqueue_run(run.id)
     session.refresh(run)
+    analysis_state(run)
     return run
 
 
@@ -117,6 +119,7 @@ def start_run(session: Session, run_id: UUID, worker_id: str = "manual") -> Anal
     run.error_message = None
     session.commit()
     session.refresh(run)
+    analysis_state(run)
     return run
 
 
@@ -151,6 +154,7 @@ def schedule_retry(session: Session, run_id: UUID, code: str, message: str) -> A
     run.lease_expires_at = None
     session.commit()
     session.refresh(run)
+    analysis_state(run, retry_delay_seconds=delay_seconds)
     return run
 
 
@@ -175,6 +179,7 @@ def store_plan(
     run.processing_stage = "DOWNLOADING_DATA"
     session.commit()
     session.refresh(run)
+    event("analysis.stage", run_id=run.id, stage=run.processing_stage, attempt=run.attempt_count)
     return run
 
 
@@ -187,6 +192,7 @@ def set_processing_stage(session: Session, run_id: UUID, stage: str) -> Analysis
     run.processing_stage = stage
     session.commit()
     session.refresh(run)
+    event("analysis.stage", run_id=run.id, stage=run.processing_stage, attempt=run.attempt_count)
     return run
 
 
@@ -226,6 +232,7 @@ def complete_run(
         run.lease_owner = None
         run.lease_expires_at = None
         session.commit()
+        analysis_state(run)
         raise HTTPException(413, "The structured analysis result exceeds the storage limit.")
 
     run.result_json = artifact_json
@@ -239,6 +246,8 @@ def complete_run(
     run.lease_expires_at = None
     session.commit()
     session.refresh(run)
+    analysis_state(run)
+    event("execution.completed", run_id=run.id, duration_ms=execution.metadata.duration_ms)
     return run
 
 
@@ -264,6 +273,7 @@ def fail_run(
     run.lease_expires_at = None
     session.commit()
     session.refresh(run)
+    analysis_state(run)
     return run
 
 
@@ -286,6 +296,7 @@ def request_clarification(
     run.lease_expires_at = None
     session.commit()
     session.refresh(run)
+    analysis_state(run)
     return run
 
 
@@ -303,6 +314,7 @@ def answer_clarification(session: Session, run_id: UUID, answer: str) -> Analysi
     session.commit()
     enqueue_run(run.id)
     session.refresh(run)
+    analysis_state(run)
     return run
 
 

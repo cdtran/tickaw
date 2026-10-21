@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.observability import analysis_state
 from app.models import AnalysisRun, DatasetVersion, Notebook, NotebookCell
 from app.schemas.analysis import AnalysisRunSummary
 from app.schemas.notebook import CellResponse, NotebookDetail, QuestionCreate
@@ -122,6 +123,7 @@ def add_question(
     enqueue_run(run.id)
     session.refresh(cell)
     session.refresh(run)
+    analysis_state(run)
     return CellResponse.model_validate(cell).model_copy(
         update={"latest_analysis": AnalysisRunSummary.model_validate(run)}
     )

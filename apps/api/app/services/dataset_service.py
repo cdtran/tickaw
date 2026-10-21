@@ -1,6 +1,5 @@
 """Allocate versions in Postgres, then durably store their original bytes."""
-import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -9,12 +8,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
+from app.core.observability import event
 from app.models import Dataset, DatasetVersion
 from app.schemas.dataset import DatasetResponse
 from app.services.object_storage import store_original
 from app.services.profiling_service import enqueue_profile
-
-logger = logging.getLogger(__name__)
 
 
 def list_datasets(session: Session, offset: int, limit: int, owner_id: UUID | None = None) -> list[DatasetResponse]:
@@ -57,11 +55,11 @@ def upload_csv(session: Session, filename: str, data: bytes,
     try:
         store_original(version.storage_bucket, version.original_object_key, data)
     except (BotoCoreError, ClientError):
-        logger.exception("Original storage failed for dataset_version=%s", version.id)
+        event("operation.failed", operation="storage_upload", dataset_version_id=version.id)
         version.status = "FAILED"
         version.error_code = "STORAGE_WRITE_FAILED"
         version.error_message = "The original file could not be confirmed in storage."
-        version.completed_at = datetime.now(timezone.utc)
+        version.completed_at = datetime.now(UTC)
         session.commit()
         raise HTTPException(503, "Storage unavailable. This upload was marked failed.") from None
 

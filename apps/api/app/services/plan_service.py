@@ -1,8 +1,13 @@
 """Generate a validated query plan for a durable analysis run."""
 
+from decimal import Decimal
+from time import perf_counter
+
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
+from app.core.observability import event
 from app.models import AnalysisRun, DatasetVersion, NotebookCell
 from packages.data_engine.execution import catalog_from_profile
 from packages.data_engine.query_plan import PlanError, QueryPlan, validate_plan
@@ -12,6 +17,7 @@ from packages.data_engine.question_semantics import (
     requested_concepts,
 )
 from packages.data_engine.temporal import parse_temporal
+from packages.llm_gateway.adapters.openai import PaidRunBlocked
 from packages.llm_gateway.adapters.openai_compatible import ModelProviderError
 from packages.llm_gateway.contracts import PlanRequest, PlanResponse
 from packages.llm_gateway.gateway import LLMGateway
@@ -41,11 +47,13 @@ def safe_validation_diagnostic(error: ValidationError | PlanError) -> dict:
         return diagnostic
     issues = []
     for item in error.errors(include_url=False, include_context=False)[:8]:
-        issues.append({
-            "path": ".".join(str(part) for part in item["loc"])[:200],
-            "type": str(item["type"])[:100],
-            "message": str(item["msg"])[:300],
-        })
+        issues.append(
+            {
+                "path": ".".join(str(part) for part in item["loc"])[:200],
+                "type": str(item["type"])[:100],
+                "message": str(item["msg"])[:300],
+            }
+        )
     return {"code": "MALFORMED_PLAN", "issues": issues}
 
 
@@ -62,9 +70,7 @@ def missing_data_clarification(
     concepts = requested_concepts(question)
     if concepts and catalog is not None:
         unavailable = sorted(
-            concept
-            for concept in concepts
-            if not concept_columns(concept, catalog)
+            concept for concept in concepts if not concept_columns(concept, catalog)
         )
         if unavailable and any(
             item["code"] in {"METRIC_TYPE_MISMATCH", "MISSING_MEASURE", "SEMANTIC_SUBSTITUTION"}
@@ -113,6 +119,24 @@ def normalize_presentation(
     return payload
 
 
+def estimated_response_cost(response: PlanResponse) -> float | None:
+    usage = response.usage
+    if response.provider != "openai" or any(
+        type(value) is not int or value < 0 for value in (usage.input_tokens, usage.output_tokens)
+    ):
+        return None
+    settings = get_settings()
+    if settings.openai_input_rate is None or settings.openai_output_rate is None:
+        return None
+    return float(
+        (
+            Decimal(usage.input_tokens) * Decimal(str(settings.openai_input_rate))
+            + Decimal(usage.output_tokens) * Decimal(str(settings.openai_output_rate))
+        )
+        / Decimal(1_000_000)
+    )
+
+
 def generate_plan(
     session: Session,
     run: AnalysisRun,
@@ -144,8 +168,21 @@ def generate_plan(
     )
     diagnostics: list[dict] = []
     for attempt in range(2):
+        started = perf_counter()
         try:
             response = gateway.generate_plan(cell.stable_model_id, request)
+            event(
+                "model.completed",
+                run_id=run.id,
+                model_id=cell.stable_model_id,
+                provider=response.provider,
+                prompt_version=PROMPT_VERSION,
+                generation_attempt=attempt + 1,
+                duration_ms=(perf_counter() - started) * 1000,
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                estimated_response_cost_usd=estimated_response_cost(response),
+            )
             normalized = normalize_presentation(response.payload, catalog, line_eligible)
             plan = validate_plan(normalized, catalog)
             meaning_issue = check_question_meaning(
@@ -160,13 +197,36 @@ def generate_plan(
                     code=meaning_issue.code,
                     details=meaning_issue.diagnostic() | {"message": meaning_issue.message},
                 )
+            event(
+                "plan.accepted",
+                run_id=run.id,
+                generation_attempt=attempt + 1,
+                correction=attempt > 0,
+            )
             return plan, response
         except ModelProviderError as error:
+            event(
+                "model.failed",
+                run_id=run.id,
+                model_id=cell.stable_model_id,
+                generation_attempt=attempt + 1,
+                duration_ms=(perf_counter() - started) * 1000,
+                error_code="POLICY_BLOCKED"
+                if isinstance(error, PaidRunBlocked)
+                else "MODEL_UNAVAILABLE",
+            )
             raise PlanGenerationError(
                 "MODEL_UNAVAILABLE", "The selected model could not generate a query plan."
             ) from error
         except (ValidationError, PlanError) as error:
-            diagnostics.append(safe_validation_diagnostic(error))
+            diagnostic = safe_validation_diagnostic(error)
+            event(
+                "plan.rejected",
+                run_id=run.id,
+                generation_attempt=attempt + 1,
+                error_code=diagnostic["code"],
+            )
+            diagnostics.append(diagnostic)
             if attempt == 1:
                 clarification = missing_data_clarification(diagnostics, cell.question, catalog)
                 if clarification:

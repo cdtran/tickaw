@@ -1,5 +1,12 @@
+x-app-logging: &app-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   api:
+    logging: *app-logging
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -17,6 +24,7 @@ services:
       minio:
         condition: service_healthy
   profiling-worker:
+    logging: *app-logging
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -39,6 +47,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
   analysis-worker:
+    logging: *app-logging
     build:
       context: .
       dockerfile: docker/api.Dockerfile

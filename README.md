@@ -168,6 +168,10 @@ registry routes and adapters without changing notebook or analysis-run contracts
 See the [data engine](packages/data_engine/README.md) and
 [runnable query-plan examples](examples/query_plans/README.md) for more detail.
 
+## Observability
+
+The API and workers emit allowlisted JSON events for HTTP requests, analysis lifecycle, validation/correction outcomes, provider usage, estimated response cost, and operational failures. See the [observability guide](apps/api/OBSERVABILITY.md) for privacy boundaries, log summaries, and retention.
+
 ## Verification
 
 Run the Python unit suite and frontend production build:

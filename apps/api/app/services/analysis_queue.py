@@ -1,14 +1,13 @@
 """Redis Stream transport for durable database-backed analysis runs."""
 
-import logging
 from functools import lru_cache
 from uuid import UUID
 
 import redis
 
 from app.core.config import get_settings
+from app.core.observability import event
 
-logger = logging.getLogger(__name__)
 STREAM = "tickaw:analysis:runs"
 GROUP = "analysis-workers"
 
@@ -28,6 +27,7 @@ def enqueue_run(run_id: UUID) -> bool:
     try:
         get_queue().xadd(STREAM, {"run_id": str(run_id)})
     except redis.RedisError:
-        logger.exception("Could not enqueue analysis run=%s; database recovery will retry", run_id)
+        event("analysis.enqueued", run_id=run_id, success=False)
         return False
+    event("analysis.enqueued", run_id=run_id, success=True)
     return True
