@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import BrowserSession, LoginTransaction, User
 from app.services.auth_service import (
+    GOOGLE_AUTHORIZATION_URL,
     LOGIN_COOKIE,
     SESSION_COOKIE,
     challenge,
@@ -67,17 +68,15 @@ def login(session: Annotated[Session, Depends(get_db)]):
             "response_type": "code",
             "client_id": settings.auth_client_id,
             "redirect_uri": settings.auth_app_origin.rstrip("/") + "/api/v1/auth/callback",
-            "scope": "openid email profile",
-            "identity_provider": "Google",
+            "scope": "openid",
+            "prompt": "select_account",
             "state": state,
             "nonce": nonce,
             "code_challenge": challenge(verifier),
             "code_challenge_method": "S256",
         }
     )
-    response = RedirectResponse(
-        settings.auth_domain.rstrip("/") + "/oauth2/authorize?" + query, 302
-    )
+    response = RedirectResponse(GOOGLE_AUTHORIZATION_URL + "?" + query, 302)
     cookie(response, LOGIN_COOKIE, browser, 600, settings)
     return private(response)
 
@@ -119,9 +118,9 @@ def callback(request: Request, session: Annotated[Session, Depends(get_db)]):
         return private(response)
     user_id = session.scalar(
         insert(User)
-        .values(issuer=claims["iss"], subject=claims["sub"], email=claims["email"])
+        .values(issuer=claims["iss"], subject=claims["sub"])
         .on_conflict_do_update(
-            index_elements=[User.issuer, User.subject], set_={"email": claims["email"]}
+            index_elements=[User.issuer, User.subject], set_={"subject": claims["sub"]}
         )
         .returning(User.id)
     )
@@ -149,7 +148,7 @@ def callback(request: Request, session: Annotated[Session, Depends(get_db)]):
 
 @router.get("/me")
 def me(user: Annotated[User, Depends(current_user)]):
-    return {"id": str(user.id), "email": user.email}
+    return {"id": str(user.id)}
 
 
 @router.post("/logout")

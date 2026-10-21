@@ -76,7 +76,7 @@ provider can later be managed services.
 
 ## Authentication
 
-Google sign-in through Cognito uses backend-managed, revocable cookie sessions and per-user dataset/notebook ownership. Provider setup is required; anonymous data access is disabled. See the [authentication walkthrough](apps/api/AUTHENTICATION.md) for the flow, setup, legacy-data migration, and validation.
+Direct Google sign-in uses backend-managed, revocable cookie sessions and per-user dataset/notebook ownership. Provider setup is required; anonymous data access is disabled. See the [authentication walkthrough](apps/api/AUTHENTICATION.md) for the flow, setup, legacy-data migration, and validation.
 
 ## Local development
 

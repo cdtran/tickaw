@@ -13,6 +13,7 @@ from app.services import auth_service as auth
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from starlette.requests import Request
 
 
@@ -20,9 +21,8 @@ from starlette.requests import Request
 def settings(monkeypatch):
     value = Settings(
         database_url="postgresql+psycopg://test:test@localhost/test",
-        auth_issuer="https://cognito-idp.us-east-1.amazonaws.com/test",
-        auth_domain="https://tickaw.auth.us-east-1.amazoncognito.com",
         auth_client_id="client",
+        auth_client_secret=SecretStr("fixture-client-secret"),
         auth_app_origin="http://localhost:5173",
         auth_cookie_secure=False,
     )
@@ -37,16 +37,14 @@ def identity(settings):
     jwk["kid"] = "test-key"
     now = datetime.now(UTC)
     claims = {
-        "iss": settings.auth_issuer,
+        "iss": auth.GOOGLE_ISSUER,
         "aud": settings.auth_client_id,
         "sub": "stable-subject",
         "exp": now + timedelta(minutes=5),
         "iat": now,
         "nonce": "expected-nonce",
-        "token_use": "id",
         "email": "person@example.test",
         "email_verified": True,
-        "identities": [{"providerName": "Google"}],
     }
     return key, {"keys": [jwk]}, claims
 
@@ -69,12 +67,9 @@ def test_valid_google_identity(settings, identity):
         {"iss": "https://attacker.test"},
         {"aud": "another-client"},
         {"aud": ["client", "other"]},
-        {"token_use": "access"},
+        {"azp": "another-client"},
         {"nonce": "wrong-nonce"},
-        {"email_verified": False},
-        {"email_verified": "true"},
-        {"identities": [{"providerName": "Other"}]},
-        {"identities": []},
+        {"iss": "https://cognito-idp.us-east-1.amazonaws.com/old-pool"},
         {"sub": ""},
         {"exp": 1},
         {"iat": 4102444800},
@@ -186,12 +181,13 @@ def test_provider_exchange_verifies_signature_and_keeps_credentials_server_side(
 
     def provider(request):
         requests.append(request)
-        if request.url.path == "/oauth2/token":
+        if str(request.url) == auth.GOOGLE_TOKEN_URL:
             body = request.content.decode()
             assert "code=private-code" in body and "code_verifier=private-verifier" in body
-            assert request.headers["authorization"].startswith("Basic ")
+            assert "client_secret=private-client-secret" in body
+            assert "authorization" not in request.headers
             return httpx.Response(200, json={"id_token": signed(key, claims)})
-        assert str(request.url) == settings.auth_issuer + "/.well-known/jwks.json"
+        assert str(request.url) == auth.GOOGLE_JWKS_URL
         return httpx.Response(200, json=jwks)
 
     original_client = httpx.Client
@@ -220,3 +216,33 @@ def test_provider_error_does_not_leak_credentials(settings, monkeypatch):
     with pytest.raises(HTTPException) as error:
         auth.exchange_code("private-code", "private-verifier", "expected-nonce")
     assert error.value.status_code == 401 and "private" not in error.value.detail
+
+
+@pytest.mark.parametrize("issuer", ["https://accounts.google.com", "accounts.google.com"])
+def test_google_issuer_spellings_share_one_identity(settings, identity, issuer):
+    key, jwks, claims = identity
+    result = auth.verify_identity(
+        signed(key, {**claims, "iss": issuer}), jwks, "expected-nonce", settings
+    )
+    assert result["iss"] == auth.GOOGLE_ISSUER and result["sub"] == claims["sub"]
+
+
+@pytest.mark.parametrize("secret", [None, "", "   "])
+def test_missing_google_secret_rejected(settings, secret):
+    settings.auth_client_secret = SecretStr(secret) if secret is not None else None
+    with pytest.raises(HTTPException) as error:
+        auth.configuration()
+    assert error.value.status_code == 503
+
+
+def test_identity_does_not_require_or_return_email(settings, identity):
+    key, jwks, claims = identity
+    # Minimal Google identity works without requesting email/profile scopes.
+    claims.pop("email")
+    claims.pop("email_verified")
+    result = auth.verify_identity(signed(key, claims), jwks, "expected-nonce", settings)
+    assert set(result) == {"iss", "sub", "exp"}
+    # Even unsolicited identity attributes are stripped before account persistence.
+    claims.update(email="private@example.test", name="Private Name", email_verified=True)
+    result = auth.verify_identity(signed(key, claims), jwks, "expected-nonce", settings)
+    assert set(result) == {"iss", "sub", "exp"}

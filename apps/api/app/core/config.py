@@ -9,8 +9,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
     database_url: SecretStr
-    auth_issuer: str = ""
-    auth_domain: str = ""
     auth_client_id: str = ""
     auth_client_secret: SecretStr | None = None
     auth_app_origin: str = "http://localhost:5173"

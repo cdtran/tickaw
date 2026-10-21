@@ -1,101 +1,91 @@
-# Google sign-in for tickaw
+# Direct Google sign-in for tickaw
 
-The application integration is implemented. Real Google sign-in needs a Google OAuth client and a Cognito user pool/app client configured by you. No AWS authentication resources have been created by this change. Provider configuration and a live two-account sign-in check are still required before deploying.
+The application connects directly to Google. Cognito is no longer used or required. User records, browser sessions, and per-user access checks remain in tickaw. Real sign-in requires a Google Web application OAuth client and a live sign-in check after configuration.
 
-## What each system does
+## How it works
 
-**Google** checks who the person is. tickaw never sees their Google password. **Cognito** connects that Google account to a stable identity in your AWS user pool. **tickaw** verifies Cognito's identity proof and records its own user and browser session in PostgreSQL.
-
-Authentication answers “who is this?” Authorization answers “may this person access this dataset or notebook?” Signing in alone does not protect data: the API checks ownership separately on each resource request.
+Google confirms the person's identity; tickaw manages the person's session and data access. Your users only need their existing Google accounts. They do not need Google Cloud or AWS accounts. You, the developer, register tickaw with Google once.
 
 ```mermaid
 sequenceDiagram
     participant Browser
     participant API as tickaw API
-    participant Cognito
     participant Google
     participant DB as PostgreSQL
     Browser->>API: Continue with Google
-    API->>DB: Save a short-lived login transaction
-    API-->>Browser: Browser-binding cookie + redirect
-    Browser->>Cognito: Authorization request
-    Cognito->>Google: Google sign-in
-    Google-->>Cognito: Google identity
-    Cognito-->>Browser: Redirect to tickaw with a one-use code
+    API->>DB: Store temporary login transaction
+    API-->>Browser: Browser-binding cookie and redirect
+    Browser->>Google: Sign in and approve basic identity access
+    Google-->>Browser: Redirect to tickaw with authorization code
     Browser->>API: Callback with code, state, and cookie
-    API->>DB: Atomically consume login transaction
-    API->>Cognito: Exchange code + PKCE verifier
-    Cognito-->>API: Signed ID token
-    API->>API: Verify signature and identity claims
-    API->>DB: Find/create user and store hashed session identifier
-    API-->>Browser: HttpOnly session cookie + redirect to app
-    Browser->>API: Request own datasets with cookie
-    API->>DB: Check session expiry and resource owner
+    API->>DB: Consume browser-bound login transaction once
+    API->>Google: Exchange code with secret and PKCE verifier
+    Google-->>API: Signed ID token
+    API->>API: Verify signature, issuer, audience, expiry, and nonce
+    API->>DB: Find/create user; save hashed session identifier
+    API-->>Browser: HttpOnly session cookie
+    Browser->>API: Request own datasets with session cookie
+    API->>DB: Verify session and resource ownership
     API-->>Browser: Authorized data
 ```
 
-The **authorization code** is a short-lived receipt; it is not the final session. **PKCE** binds that receipt to a secret created when this login began. **State** and a browser-binding cookie tie the callback to the browser that started it. **Nonce** ties the signed identity token to the same login transaction. The transaction expires after ten minutes and can be used once.
+**Authentication** answers “who is this?” Google does that without sharing the person's password with tickaw. **Authorization** answers “may this user access this resource?” tickaw checks dataset and notebook ownership on every API request.
 
-A **JWT** is a signed message containing identity claims. PyJWT verifies Cognito's RSA signature using public keys obtained from the configured issuer; the API also verifies the issuer, client audience, expiry, issue time, nonce, token purpose, verified email, and Google provider identity. Merely decoding a JWT would not establish trust.
+An **authorization code** is a short-lived receipt delivered to the backend callback. The backend exchanges it for Google's **ID token**, a signed identity message (JWT). PyJWT verifies Google's RSA signature and checks the allowed Google issuer, this app's client ID, expiry, issue time, and nonce. An unexpected authorized-party (`azp`) claim is rejected. Decoding a token alone would not prove identity.
 
-A **session cookie** is a random identifier that the browser sends automatically to the API. PostgreSQL stores only its SHA-256 hash. HttpOnly prevents JavaScript from reading it; Secure restricts it to HTTPS; SameSite=Lax limits cross-site cookie use while allowing the sign-in redirect. Write requests additionally require an exact match to the configured Origin header. Tokens are never placed in browser storage or returned to frontend JavaScript.
+The identity is Google's stable `sub`, combined with a canonical Google issuer. Email addresses and profile attributes are not requested, stored, or returned by tickaw. The account bar displays “Signed in.” Both Google-documented issuer spellings normalize to one identity. Existing identities from the former Cognito implementation are not automatically linked by email; if any were created, an administrator must review a migration before switching real users. Migration 0015 removes the old email column without changing user IDs, sessions, or ownership.
 
-## Configure Google and Cognito
+**State** and the browser-binding cookie connect the callback to the browser that began it. **PKCE** binds redemption of the code to a secret created for this login. **Nonce** binds the ID token to the login request. Transactions expire in ten minutes and can be consumed only once.
 
-Use separate development and production clients/pools. Start with development; creating AWS resources can incur charges, so review [Cognito pricing](https://aws.amazon.com/cognito/pricing/) before creating them.
+The **session cookie** contains a random identifier. The server stores only its hash in PostgreSQL and checks its expiry on requests. HttpOnly prevents JavaScript from reading the cookie; Secure restricts it to HTTPS in deployment; SameSite=Lax supports the login redirect while limiting cross-site cookie use. Write requests also require an exact match to the configured Origin header. Google tokens never enter frontend JavaScript or browser storage.
 
-1. In Google Cloud Console, create/select a project and configure Google Auth Platform branding, audience, and data access. Request only `openid`, `email`, and `profile`. While the app is in external testing mode, add your Google account and a second test account as test users. You do not need Gmail or Drive access.
-2. Create a Google OAuth client of type **Web application**. Save its client ID and client secret privately. This client belongs to the Google-to-Cognito connection.
-3. In AWS Cognito, create a **user pool** for tickaw. This is different from an identity pool: users access S3 through your backend, so an identity pool and browser AWS credentials are unnecessary. Disable public native self-registration for this Google-only app. Avoid making extra attributes mandatory.
-4. Add a Cognito user pool domain. Its base URL will look like `https://YOUR-PREFIX.auth.us-east-1.amazoncognito.com` (use your actual region). This is `AUTH_DOMAIN`.
-5. Return to the Google OAuth client and add this exact authorized redirect URI:
-   ```text
-   https://YOUR-PREFIX.auth.us-east-1.amazoncognito.com/oauth2/idpresponse
-   ```
-   Google sends its response to Cognito at this address. It does not send it directly to tickaw. No Google JavaScript origins are needed for this server redirect flow.
-6. In Cognito's social identity providers, add **Google** using that Google client ID/secret. Configure Google scopes `openid email profile`. Map Google `email` to Cognito `email` and Google `email_verified` to Cognito `email_verified`. The API requires a verified email but uses the stable Cognito subject as identity; email addresses are not used to merge accounts.
-7. Create/configure a Cognito **app client** for the traditional web application. Enable **Google** as the identity provider and **authorization code grant** as the OAuth flow; do not enable implicit grant. Allow scopes `openid`, `email`, and `profile`, and permit reading and writing the mapped email attributes. A client secret is supported and belongs only on the backend. This is a different client ID/secret from the Google pair.
-8. Set Cognito's allowed callback URL to:
+See Google's [OpenID Connect server flow](https://developers.google.com/identity/openid-connect/openid-connect) and [published provider endpoints](https://accounts.google.com/.well-known/openid-configuration). The implementation uses fixed Google endpoints; old Cognito issuer/domain settings are ignored.
+
+## Set up your Google client
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) with your existing Google account. Select the project containing your OAuth client, or create one.
+2. In Google Auth Platform, configure Branding and Audience for tickaw. Use only the `openid` identity scope; tickaw does not need email or profile access. Configure test users while testing if required by your audience settings. Gmail and Drive access are unnecessary.
+3. In Clients, select/create a **Web application** OAuth client. A service account or desktop client is not the right type.
+4. Add this exact **Authorized redirect URI**:
    ```text
    http://localhost:5173/api/v1/auth/callback
    ```
-   The Vite proxy forwards this path to FastAPI. Register this complete URL, including the port and path. Do not use port 8000 for this callback. If Cognito requires a sign-out URL, use `http://localhost:5173/`; the current tickaw sign-out button revokes the local session rather than calling Cognito logout.
-9. Find the user pool's issuer. For a standard regional pool it looks like:
-   ```text
-   https://cognito-idp.us-east-1.amazonaws.com/us-east-1_YOURPOOLID
-   ```
-   Use the actual issuer for your pool. It differs from the login domain.
+   Google now returns directly to tickaw. Vite forwards `/api` to FastAPI. Use port 5173, not 8000. This server redirect flow does not need an authorized JavaScript origin.
+5. Copy the Google client ID and secret into your local backend `.env` settings below. If a secret was shared in chat, replace it in Google Cloud and use only the replacement; the application does not use the secret pasted into this conversation.
 
-See Google's [OpenID Connect setup](https://developers.google.com/identity/openid-connect/openid-connect), AWS's [attribute mapping guidance](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-specifying-attribute-mapping.html), and AWS's [Google identity provider setup](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-social-idp.html), [authorization endpoint](https://docs.aws.amazon.com/cognito/latest/developerguide/authorization-endpoint.html), and [token endpoint](https://docs.aws.amazon.com/cognito/latest/developerguide/token-endpoint.html). Console labels can change; the important settings are the provider, scopes, grant type, mappings, and exact redirects above.
+For deployment, register your exact HTTPS callback, such as `https://tickaw.com/api/v1/auth/callback`, once that origin is serving your application. Separate development and production clients make configuration easier to manage. The registered callback must match the configured app origin exactly.
 
-## Configure the local application
+## Configure tickaw
 
-Add these to your existing `.env` without overwriting its other settings:
+Add/update these settings in your existing `.env`, preserving its other contents:
 
 ```dotenv
-AUTH_ISSUER=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_YOURPOOLID
-AUTH_DOMAIN=https://YOUR-PREFIX.auth.us-east-1.amazoncognito.com
-AUTH_CLIENT_ID=YOUR_COGNITO_APP_CLIENT_ID
-AUTH_CLIENT_SECRET=YOUR_COGNITO_APP_CLIENT_SECRET
+# Both values below are from the Google Web application OAuth client.
+AUTH_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
+AUTH_CLIENT_SECRET=YOUR_REPLACEMENT_GOOGLE_CLIENT_SECRET
 AUTH_APP_ORIGIN=http://localhost:5173
 AUTH_COOKIE_SECURE=false
 AUTH_SESSION_SECONDS=3600
 ```
 
-Leave `AUTH_CLIENT_SECRET` empty only if the Cognito app client was created without one. The Google secret stays in Cognito; the app's secret above is Cognito's. Never put either secret in `VITE_` variables, Git, screenshots, or chat. In AWS deployment, supply backend secrets through Secrets Manager.
+`AUTH_CLIENT_SECRET` now means the Google client secret. Remove obsolete `AUTH_ISSUER` and `AUTH_DOMAIN` settings; Google endpoints and issuers are fixed in code. Keep secrets out of Git, chat, and frontend `VITE_` variables. In AWS, supply the backend secret through Secrets Manager. No Cognito resources or credentials are needed.
 
-Start the services, rebuild the API and workers for the JWT dependency, and apply the migration before serving requests:
+The backend refuses login if the client ID or secret is missing. `.env.example` documents settings but does not overwrite an existing `.env`.
+
+Recreate the API after changing `.env` so it receives the new environment:
 
 ```sh
 docker --host unix:///Users/christran/.docker/run/docker.sock compose up -d postgres redis minio
-docker --host unix:///Users/christran/.docker/run/docker.sock compose build api profiling-worker analysis-worker
+docker --host unix:///Users/christran/.docker/run/docker.sock compose build api
 docker --host unix:///Users/christran/.docker/run/docker.sock compose run --rm api alembic upgrade head
-docker --host unix:///Users/christran/.docker/run/docker.sock compose up -d api web profiling-worker analysis-worker
+docker --host unix:///Users/christran/.docker/run/docker.sock compose up -d --force-recreate api web
 ```
 
-Open `http://localhost:5173`, click Continue with Google, and choose a configured test user. Without Cognito configuration, the API refuses login with a setup error; it does not fall back to anonymous access. The settings in `.env.example` are examples and are not automatically copied into an existing `.env`.
+For the first local installation also follow the README's storage initialization and worker startup steps. Apply migration 0015 before restarting the updated API. No additional Python dependency is needed.
 
-For HTTPS deployment, change `AUTH_APP_ORIGIN` to your real HTTPS origin, set `AUTH_COOKIE_SECURE=true`, and register its exact `/api/v1/auth/callback` URL in Cognito. Route the frontend and `/api` through the same public origin. The API rejects insecure non-localhost configurations. CORS alone is not an access-control mechanism.
+Open `http://localhost:5173` and click Continue with Google. If Google reports `redirect_uri_mismatch`, compare the full registered callback with `AUTH_APP_ORIGIN` plus `/api/v1/auth/callback`. If tickaw reports failed verification, confirm the client ID and secret belong to the same Google Web client.
+
+For production, use your real HTTPS origin with `AUTH_COOKIE_SECURE=true` and serve frontend and `/api` from the same public origin. Insecure non-localhost configurations are rejected. CORS alone does not protect user data.
 
 ## Ownership and existing demo records
 
@@ -111,15 +101,13 @@ Review the counts and target ID, then repeat with `--apply` if those are the rec
 
 ## Sessions and sign-out
 
-Sessions last at most one hour, capped by the verified ID token's expiry. This version discards provider access/refresh tokens and does not silently refresh sessions. An expired API session returns 401 and the frontend returns to sign-in. Logging in again rotates the current browser session. Other browsers retain their separate sessions.
+Sessions last at most one hour, capped by the verified ID token's expiry. Provider access/refresh tokens are discarded, so this version does not silently refresh sessions. An expired API session returns 401 and the frontend returns to sign-in. A new login rotates the current browser session; other browsers retain their separate sessions.
 
-Sign out removes this browser's database session and cookie, immediately making the old cookie unusable. It does not sign the person out of Google or clear Cognito's own browser session; the next login may therefore be quick. Google/Cognito account revocation does not immediately revoke an already-issued tickaw session: it expires within an hour unless an administrator deletes its session records. Global logout, account deletion, and revocation-event integration are follow-up features.
+Sign out immediately removes that browser's database session and cookie. It does not sign the person out of Google. Google account revocation does not immediately revoke an existing tickaw session; it expires within an hour unless an administrator deletes its session records. Global logout, account deletion, and revocation-event integration are follow-up features.
 
-Login requests remove expired transactions and sessions. A scheduled cleanup can be added later if needed. No personal spreadsheet contents or credentials are needed for authentication logs. API responses use `Cache-Control: no-store`; the Docker API disables access logs because callback query strings contain authorization codes. Any production reverse proxy or load balancer must omit/redact callback query strings from logs too.
+Login requests remove expired transactions and sessions. API responses use `Cache-Control: no-store`. The Docker API disables access logs because callbacks contain authorization codes; production proxies must omit/redact callback query strings too. PostgreSQL, Redis, and object storage must remain private in production.
 
-## Verify before real users
-
-Automated checks cover forged/wrong/expired JWTs, PKCE, Origin checks, anonymous API denial, real database sessions, logout and expiry, browser-bound one-use callbacks, session rotation, and cross-user access to datasets, versions, notebooks, retries, clarifications, and results. The provider exchange is simulated in the integration harness; these tests do not prove the external Google/Cognito configuration.
+## Verification
 
 ```sh
 PYTHONPATH=.:apps/api .venv/bin/python -m pytest tests/unit -q
@@ -127,8 +115,10 @@ npm --prefix apps/web run build
 docker --host unix:///Users/christran/.docker/run/docker.sock compose run --rm api python -m tests.check_migrations
 ```
 
-After configuration, verify with two Google accounts in separate browser profiles: upload and analyze under account A; confirm B sees none of A's records and receives 404 when requesting their IDs; sign out and confirm protected requests fail. Check that production cookies have Secure and HttpOnly enabled. Keep PostgreSQL, Redis, and object storage private; local Docker's published development ports are not an AWS production configuration.
+Tests simulate Google responses rather than using real credentials. They check signed Google identities, issuer normalization, rejection of other issuers, PKCE, origin validation, anonymous access denial, and real database callback/session/ownership behavior. They do not prove your external Google client configuration.
 
-## Validation recorded for this change
+After configuration, use two Google accounts in separate browser profiles: create/upload under A, confirm B cannot see or request A's resources, sign out, and confirm the old session no longer works. A live Google sign-in check remains required before deployment.
 
-On October 1, 2026: 216 Python unit tests passed (27 authentication tests); the frontend production build passed; the disposable PostgreSQL/MinIO harness passed schema agreement, fresh upgrade, downgrade/re-upgrade, existing application integration checks, and authentication/ownership checks. Migration 0014 was applied to the local development database. The sign-in screen was checked in the browser. Live Google/Cognito sign-in remains unverified pending provider configuration. No live model evaluations or AWS provisioning occurred.
+## Email removal
+
+Migration 0015 drops the email column from the active database. Downgrading recreates the old column with empty placeholders; deleted emails cannot be recovered by a downgrade. Dropping the column does not sanitize old backups, PostgreSQL write-ahead logs, or physical storage remnants. Retention and backup disposal must be handled separately. Previously granted Google email/profile permissions may remain in Google account consent history; new requests ask only for `openid`.

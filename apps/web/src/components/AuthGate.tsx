@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-type User = { id: string; email: string };
+type User = { id: string };
 export default function AuthGate({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +36,6 @@ export default function AuthGate({ children }: { children: ReactNode }) {
     {error && <p role="alert" className="error">{error}</p>}
     {new URLSearchParams(window.location.search).has("auth_error") && <p role="alert">Sign-in did not complete. You can try again.</p>}
     <a href="/api/v1/auth/login">Continue with Google</a></main>;
-  return <><div className="account-bar"><span>{user.email}</span> <button onClick={logout}>Sign out</button>
+  return <><div className="account-bar"><span>Signed in</span> <button onClick={logout}>Sign out</button>
     {error && <p role="alert">{error}</p>}</div>{children}</>;
 }

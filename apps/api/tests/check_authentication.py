@@ -17,9 +17,16 @@ from app.models import (
     NotebookCell,
     User,
 )
-from app.services.auth_service import LOGIN_COOKIE, SESSION_COOKIE, digest
+from app.services.auth_service import (
+    GOOGLE_AUTHORIZATION_URL,
+    GOOGLE_ISSUER,
+    LOGIN_COOKIE,
+    SESSION_COOKIE,
+    digest,
+)
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import select
 
 from tests.auth_helpers import authenticated_client
@@ -146,9 +153,8 @@ def main():
     assert bob.get("/api/v1/auth/me").status_code == 401
     settings = get_settings()
     overrides = {
-        "auth_issuer": "https://cognito-idp.us-east-1.amazonaws.com/test-pool",
-        "auth_domain": "https://test.auth.us-east-1.amazoncognito.com",
         "auth_client_id": "test-client",
+        "auth_client_secret": SecretStr("fixture-client-secret"),
         "auth_app_origin": "http://localhost:5173",
         "auth_cookie_secure": False,
     }
@@ -163,9 +169,12 @@ def main():
                 and "SameSite=lax" in response.headers["set-cookie"]
             )
             query = parse_qs(urlsplit(response.headers["location"]).query)
-            assert query["identity_provider"] == ["Google"] and query["code_challenge_method"] == [
-                "S256"
-            ]
+            assert response.headers["location"].startswith(GOOGLE_AUTHORIZATION_URL + "?")
+            assert query["prompt"] == ["select_account"]
+            assert query["scope"] == ["openid"]
+            assert query["code_challenge_method"] == ["S256"]
+            assert "identity_provider" not in query
+            assert query["redirect_uri"] == ["http://localhost:5173/api/v1/auth/callback"]
             return query
 
         query = begin()
@@ -175,8 +184,8 @@ def main():
         assert attacker.get(callback).status_code == 400
         assert oidc.get(callback.replace(query["state"][0], "wrong-state")).status_code == 400
         claims = {
-            "iss": settings.auth_issuer,
-            "sub": "google-cognito-sub",
+            "iss": GOOGLE_ISSUER,
+            "sub": "google-sub",
             "email": "google@example.test",
             "exp": int((datetime.now(UTC) + timedelta(minutes=30)).timestamp()),
         }
@@ -189,7 +198,7 @@ def main():
             assert oidc.get(callback).status_code == 400  # replay cannot create another session
         assert oidc.cookies.get(LOGIN_COOKIE) is None
         me = oidc.get("/api/v1/auth/me")
-        assert me.status_code == 200 and me.json()["email"] == claims["email"]
+        assert me.status_code == 200 and set(me.json()) == {"id"}
         first_id, first_token = me.json()["id"], oidc.cookies.get(SESSION_COOKIE)
         query = begin()
         with patch("app.api.v1.endpoints.auth.exchange_code", return_value=claims):

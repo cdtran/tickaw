@@ -23,7 +23,6 @@ def authenticated_client():
         user = User(
             issuer="https://fixture.example.test",
             subject=str(uuid4()),
-            email="fixture@example.test",
         )
         session.add(user)
         session.flush()

@@ -1,4 +1,4 @@
-"""Cognito OIDC verification. Tokens never leave the backend."""
+"""Direct Google OIDC verification. Tokens never leave the backend."""
 
 import base64
 import hashlib
@@ -19,6 +19,10 @@ from app.models import BrowserSession, User
 
 SESSION_COOKIE = "tickaw_session"
 LOGIN_COOKIE = "tickaw_login"
+GOOGLE_ISSUER = "https://accounts.google.com"
+GOOGLE_AUTHORIZATION_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 
 
 def digest(value: str) -> str:
@@ -37,13 +41,11 @@ def challenge(verifier: str) -> str:
 
 def configuration():
     settings = get_settings()
-    for value in (settings.auth_issuer, settings.auth_domain):
-        url = urlsplit(value)
-        if url.scheme != "https" or not url.hostname or url.query or url.fragment or url.username:
-            raise HTTPException(503, "Google sign-in has not been configured.")
     origin = urlsplit(settings.auth_app_origin)
     if (
         not settings.auth_client_id
+        or not settings.auth_client_secret
+        or not settings.auth_client_secret.get_secret_value().strip()
         or not origin.hostname
         or origin.path not in ("", "/")
         or origin.query
@@ -96,16 +98,13 @@ def exchange_code(code: str, verifier: str, nonce: str) -> dict:
         "code_verifier": verifier,
         "redirect_uri": settings.auth_app_origin.rstrip("/") + "/api/v1/auth/callback",
     }
-    secret = settings.auth_client_secret
-    auth = httpx.BasicAuth(settings.auth_client_id, secret.get_secret_value()) if secret else None
+    data["client_secret"] = settings.auth_client_secret.get_secret_value()
     try:
         with httpx.Client(timeout=15, follow_redirects=False) as client:
-            response = client.post(
-                settings.auth_domain.rstrip("/") + "/oauth2/token", data=data, auth=auth
-            )
+            response = client.post(GOOGLE_TOKEN_URL, data=data)
             response.raise_for_status()
             token = response.json()["id_token"]
-            keys = client.get(settings.auth_issuer.rstrip("/") + "/.well-known/jwks.json")
+            keys = client.get(GOOGLE_JWKS_URL)
             keys.raise_for_status()
         return verify_identity(token, keys.json(), nonce, settings)
     except (httpx.HTTPError, ValueError, KeyError, TypeError, jwt.PyJWTError):
@@ -117,7 +116,16 @@ def exchange_code(code: str, verifier: str, nonce: str) -> dict:
 
 def verify_identity(token, jwks, nonce, settings):
     header = jwt.get_unverified_header(token)
-    key = next((item for item in jwks["keys"] if item.get("kid") == header.get("kid")), None)
+    if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list):
+        raise TypeError("Invalid signing keys")
+    key = next(
+        (
+            item
+            for item in jwks["keys"]
+            if isinstance(item, dict) and item.get("kid") == header.get("kid")
+        ),
+        None,
+    )
     if key is None or header.get("alg") != "RS256":
         raise ValueError("Unexpected signing key")
     claims = jwt.decode(
@@ -125,19 +133,16 @@ def verify_identity(token, jwks, nonce, settings):
         jwt.PyJWK.from_dict(key).key,
         algorithms=["RS256"],
         audience=settings.auth_client_id,
-        issuer=settings.auth_issuer.rstrip("/"),
-        options={"require": ["exp", "iat", "sub", "iss", "aud", "nonce", "token_use"]},
+        issuer=[GOOGLE_ISSUER, "accounts.google.com"],
+        options={"require": ["exp", "iat", "sub", "iss", "aud", "nonce"]},
     )
-    identities = claims.get("identities", [])
     if (
         claims["aud"] != settings.auth_client_id
-        or claims["token_use"] != "id"
+        or claims.get("azp", settings.auth_client_id) != settings.auth_client_id
+        or not isinstance(claims["nonce"], str)
         or not secrets.compare_digest(claims["nonce"], nonce)
-        or claims.get("email_verified") is not True
-        or not claims.get("email")
         or not claims["sub"]
-        or not isinstance(identities, list)
-        or not any(isinstance(i, dict) and i.get("providerName") == "Google" for i in identities)
     ):
         raise ValueError("Unexpected identity")
-    return claims
+    # Google permits both issuer spellings; keep one stable database identity.
+    return {"iss": GOOGLE_ISSUER, "sub": claims["sub"], "exp": claims["exp"]}

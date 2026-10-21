@@ -15,7 +15,6 @@ class User(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     issuer: Mapped[str] = mapped_column(Text)
     subject: Mapped[str] = mapped_column(Text)
-    email: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
